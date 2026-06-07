@@ -1,22 +1,39 @@
-export const VAULT_ADDRESS = process.env.NEXT_PUBLIC_VAULT_ADDRESS as `0x${string}`;
+export const VAULT_ADDRESS   = process.env.NEXT_PUBLIC_VAULT_ADDRESS   as `0x${string}`;
 export const GOVERNOR_ADDRESS = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS as `0x${string}`;
-export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "0x7e798cBfCEFb5E36341020e17137fd5CA00BEf01") as `0x${string}`;
-export const MOCK_AAVE_ADDRESS = (process.env.NEXT_PUBLIC_MOCK_AAVE_ADDRESS ?? "0xB150c04A5e4FAB33dD601b0190fbb1beEF711490") as `0x${string}`;
+export const USDC_ADDRESS    = (process.env.NEXT_PUBLIC_USDC_ADDRESS    ?? "0x572A1834ea4783f46aC9069470046B7CdB8dB0fd") as `0x${string}`;
+export const MOCK_STRATEGY_ADDRESS = (process.env.NEXT_PUBLIC_MOCK_STRATEGY_ADDRESS ?? "0x7252b361a493827dcA55822EE37772489f3345AA") as `0x${string}`;
 
 export const VAULT_ABI = [
-  { name: "corePrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "seamPrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "apexPrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── Principal & yield buckets ───────────────────────────────────────────
+  { name: "corePrincipal",        type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "seamPrincipal",        type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "apexPrincipal",        type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "coreAccumulatedYield", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "seamAccumulatedYield", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "apexAccumulatedYield", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "totalPrincipal",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "pendingPenalties",     type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── APY targets ─────────────────────────────────────────────────────────
   { name: "coreTargetMinBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "coreTargetMaxBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "seamTargetMinBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "seamTargetMaxBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "lastEpochTimestamp", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "epochCount", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── Epoch ───────────────────────────────────────────────────────────────
+  { name: "lastEpochTimestamp",  type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "epochCount",          type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "withdrawQueueLength", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── Share tokens ────────────────────────────────────────────────────────
   { name: "coreToken", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { name: "seamToken", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { name: "apexToken", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
-  { name: "totalPrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  // ── ERC-4626 view ───────────────────────────────────────────────────────
+  {
+    name: "previewRedeem",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "shares", type: "uint256" }, { name: "tier", type: "uint8" }],
+    outputs: [{ type: "uint256" }],
+  },
   {
     name: "pendingYield",
     type: "function",
@@ -24,6 +41,7 @@ export const VAULT_ABI = [
     inputs: [{ name: "user", type: "address" }, { name: "tier", type: "uint8" }],
     outputs: [{ type: "uint256" }],
   },
+  // ── Write ───────────────────────────────────────────────────────────────
   {
     name: "deposit",
     type: "function",
@@ -32,60 +50,66 @@ export const VAULT_ABI = [
     outputs: [],
   },
   {
-    name: "withdraw",
+    name: "requestWithdraw",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "shares", type: "uint256" }, { name: "tier", type: "uint8" }],
+    outputs: [],
+  },
+  {
+    name: "earlyWithdraw",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [{ name: "shares", type: "uint256" }, { name: "tier", type: "uint8" }],
     outputs: [],
   },
   { name: "settleEpoch", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  // Events
+  // ── Events ──────────────────────────────────────────────────────────────
   {
     name: "Deposited",
     type: "event",
     inputs: [
-      { name: "user", type: "address", indexed: true },
-      { name: "tier", type: "uint8", indexed: true },
+      { name: "user",   type: "address", indexed: true },
+      { name: "tier",   type: "uint8",   indexed: true },
       { name: "amount", type: "uint256", indexed: false },
       { name: "shares", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "WithdrawRequested",
+    type: "event",
+    inputs: [
+      { name: "user",   type: "address", indexed: true },
+      { name: "tier",   type: "uint8",   indexed: true },
+      { name: "shares", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "EarlyWithdraw",
+    type: "event",
+    inputs: [
+      { name: "user",     type: "address", indexed: true },
+      { name: "tier",     type: "uint8",   indexed: true },
+      { name: "shares",   type: "uint256", indexed: false },
+      { name: "received", type: "uint256", indexed: false },
+      { name: "penalty",  type: "uint256", indexed: false },
     ],
   },
   {
     name: "EpochSettled",
     type: "event",
     inputs: [
-      { name: "epochId", type: "uint256", indexed: true },
+      { name: "epochId",    type: "uint256", indexed: true },
       { name: "totalYield", type: "uint256", indexed: false },
-      { name: "coreShare", type: "uint256", indexed: false },
-      { name: "seamShare", type: "uint256", indexed: false },
-      { name: "apexShare", type: "uint256", indexed: false },
+      { name: "coreShare",  type: "uint256", indexed: false },
+      { name: "seamShare",  type: "uint256", indexed: false },
+      { name: "apexShare",  type: "uint256", indexed: false },
     ],
   },
 ] as const;
 
 export const GOVERNOR_ABI = [
   { name: "proposalCount", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  {
-    name: "proposals",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "id", type: "uint256" }],
-    outputs: [{
-      type: "tuple",
-      components: [
-        { name: "id", type: "uint256" },
-        { name: "proposer", type: "address" },
-        { name: "newCoreMin", type: "uint256" },
-        { name: "newCoreMax", type: "uint256" },
-        { name: "newSeamMin", type: "uint256" },
-        { name: "newSeamMax", type: "uint256" },
-        { name: "reason", type: "string" },
-        { name: "proposedAt", type: "uint256" },
-        { name: "executed", type: "bool" },
-        { name: "rejected", type: "bool" },
-      ],
-    }],
-  },
   {
     name: "latestProposal",
     type: "function",
@@ -94,16 +118,16 @@ export const GOVERNOR_ABI = [
     outputs: [{
       type: "tuple",
       components: [
-        { name: "id", type: "uint256" },
-        { name: "proposer", type: "address" },
+        { name: "id",         type: "uint256" },
+        { name: "proposer",   type: "address" },
         { name: "newCoreMin", type: "uint256" },
         { name: "newCoreMax", type: "uint256" },
         { name: "newSeamMin", type: "uint256" },
         { name: "newSeamMax", type: "uint256" },
-        { name: "reason", type: "string" },
+        { name: "reason",     type: "string"  },
         { name: "proposedAt", type: "uint256" },
-        { name: "executed", type: "bool" },
-        { name: "rejected", type: "bool" },
+        { name: "executed",   type: "bool"    },
+        { name: "rejected",   type: "bool"    },
       ],
     }],
   },
@@ -120,19 +144,6 @@ export const GOVERNOR_ABI = [
     stateMutability: "nonpayable",
     inputs: [{ name: "proposalId", type: "uint256" }],
     outputs: [],
-  },
-  {
-    name: "ProposalCreated",
-    type: "event",
-    inputs: [
-      { name: "id", type: "uint256", indexed: true },
-      { name: "proposer", type: "address", indexed: true },
-      { name: "newCoreMin", type: "uint256", indexed: false },
-      { name: "newCoreMax", type: "uint256", indexed: false },
-      { name: "newSeamMin", type: "uint256", indexed: false },
-      { name: "newSeamMax", type: "uint256", indexed: false },
-      { name: "reason", type: "string", indexed: false },
-    ],
   },
 ] as const;
 
@@ -167,20 +178,14 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-export const MOCK_AAVE_ABI = [
-  { name: "apyBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+export const MOCK_STRATEGY_ABI = [
+  { name: "deployedPrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "pendingYield",      type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   {
-    name: "setApyBps",
+    name: "addYield",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "_apyBps", type: "uint256" }],
-    outputs: [],
-  },
-  {
-    name: "accrue",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "vaultAddress", type: "address" }, { name: "yieldAmount", type: "uint256" }],
+    inputs: [{ name: "amount", type: "uint256" }],
     outputs: [],
   },
 ] as const;
