@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+.env.local
+.env*.local
+.wallet
+
+# Foundry build artifacts
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/
+broadcast/
+
+# Foundry libs (installed via forge install)
+contracts/lib/
+
+# Node
+node_modules/
+agent/dist/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# OS
+.DS_Store
+Thumbs.db
