@@ -1,14 +1,15 @@
 "use client";
 import { useState } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
 import { VAULT_ADDRESS, VAULT_ABI, USDC_ADDRESS, ERC20_ABI } from "../../lib/contracts";
 import { TIERS, TierId, parseUsdc, bpsToPercent } from "../../lib/utils";
-import { useReadContracts } from "wagmi";
 
 export default function DepositPage() {
   const { address, isConnected } = useAccount();
   const [selectedTier, setSelectedTier] = useState<TierId>(0);
   const [amount, setAmount] = useState("");
+  const [faucetLoading, setFaucetLoading] = useState(false);
+  const [faucetMsg, setFaucetMsg] = useState<string | null>(null);
 
   const { writeContract, isPending, data: txHash } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
@@ -74,6 +75,29 @@ export default function DepositPage() {
     });
   }
 
+  async function handleFaucet() {
+    if (!address) return;
+    setFaucetLoading(true);
+    setFaucetMsg(null);
+    try {
+      const res = await fetch("/api/faucet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFaucetMsg("10,000 USDC sent! Tx: " + data.txHash.slice(0, 10) + "...");
+      } else {
+        setFaucetMsg(data.error ?? "Faucet error");
+      }
+    } catch {
+      setFaucetMsg("Network error");
+    } finally {
+      setFaucetLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-md">
       <h1 className="text-2xl font-bold mb-6">Deposit</h1>
@@ -108,9 +132,25 @@ export default function DepositPage() {
           min="0"
           className="w-full border border-gray-200 px-3 py-2 font-mono focus:outline-none focus:border-black"
         />
-        {usdcBalance !== undefined && (
-          <p className="text-xs text-gray-400 mt-1">
-            Balance: ${(Number(usdcBalance) / 1e6).toFixed(2)} USDC
+        <div className="flex justify-between items-center mt-1">
+          {usdcBalance !== undefined && (
+            <p className="text-xs text-gray-400">
+              Balance: ${(Number(usdcBalance) / 1e6).toFixed(2)} USDC
+            </p>
+          )}
+          {isConnected && (
+            <button
+              onClick={handleFaucet}
+              disabled={faucetLoading}
+              className="text-xs text-gray-400 hover:text-black underline disabled:opacity-50"
+            >
+              {faucetLoading ? "Sending..." : "Get test USDC"}
+            </button>
+          )}
+        </div>
+        {faucetMsg && (
+          <p className={`text-xs mt-1 ${faucetMsg.startsWith("10,000") ? "text-green-600" : "text-red-500"}`}>
+            {faucetMsg}
           </p>
         )}
       </div>

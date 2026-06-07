@@ -4,19 +4,16 @@ import { VaultState, MarketCondition } from "./types";
 
 const GOVERNOR_ABI = [
   "function proposeRebalance(uint256 newCoreMin, uint256 newCoreMax, uint256 newSeamMin, uint256 newSeamMax, string reason) returns (uint256)",
+  "function proposalCount() view returns (uint256)",
 ];
 
 /**
  * Assess market conditions and decide if a rebalance proposal is warranted.
  *
  * Decision rules:
- *   - Ideal CORE target min = floor(aaveAPY * 0.65)
- *   - If current CORE target min differs from ideal by > REBALANCE_THRESHOLD_BPS → act
- *   - SEAM targets = ~35-40% of Aave APY (SEAM gets second priority, less upside)
- *   - APEX gets residual — no explicit target needed
- *
- * Safety: CORE target never set above 80% of Aave APY so waterfall always has
- * headroom. CORE max is always capped at 20% by the vault contract itself.
+ *   - Ideal CORE min = floor(aaveAPY * 0.65)
+ *   - If |ideal - current| > REBALANCE_THRESHOLD_BPS → act
+ *   - SEAM targets = 30-40% of Aave APY
  */
 export function assessMarket(vault: VaultState, aaveAPYBps: number): MarketCondition {
   const currentCoreMin = Number(vault.coreTargetMinBps);
@@ -54,20 +51,20 @@ export function assessMarket(vault: VaultState, aaveAPYBps: number): MarketCondi
 }
 
 export async function submitProposal(market: MarketCondition): Promise<string> {
-  const governor = new ethers.Contract(
-    ADDRESSES.governor,
-    GOVERNOR_ABI,
-    agentWallet
-  );
+  const governor = new ethers.Contract(ADDRESSES.governor, GOVERNOR_ABI, agentWallet);
 
-  console.log(`[proposer] Submitting: ${market.reason}`);
+  // Fetch on-chain nonce to avoid stale nonce errors from multiple rapid submits
+  const nonce = await agentWallet.getNonce("latest");
+
+  console.log(`[proposer] Submitting (nonce=${nonce}): ${market.reason}`);
 
   const tx = await governor.proposeRebalance(
     market.suggestedCoreMin,
     market.suggestedCoreMax,
     market.suggestedSeamMin,
     market.suggestedSeamMax,
-    market.reason
+    market.reason,
+    { nonce }
   );
 
   const receipt = await tx.wait();
