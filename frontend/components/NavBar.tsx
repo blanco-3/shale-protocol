@@ -11,6 +11,8 @@ export function NavBar() {
         <Link href="/" className="hover:underline">Dashboard</Link>
         <Link href="/deposit" className="hover:underline">Deposit</Link>
         <Link href="/portfolio" className="hover:underline">Portfolio</Link>
+        <Link href="/analytics" className="hover:underline">Analytics</Link>
+        <Link href="/safety" className="hover:underline">Safety</Link>
       </div>
       {/* Reown AppKit web component — renders connect button + social login modal */}
       <appkit-button />
