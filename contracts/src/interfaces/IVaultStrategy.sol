@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+/// @notice Minimal interface for MockUSDC's public mint function.
+///         Sim-strategies use this to generate yield without a pre-funded reserve.
+interface IMintableToken {
+    function mint(address to, uint256 amount) external;
+}
+
 /**
  * @title IVaultStrategy
  * @notice Strategy interface — abstracts the yield source from the vault.
