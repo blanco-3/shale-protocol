@@ -4,7 +4,7 @@ import { arbitrumSepolia } from "viem/chains";
 
 const VAULT     = process.env.NEXT_PUBLIC_VAULT_ADDRESS   as `0x${string}`;
 const GOVERNOR  = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS as `0x${string}`;
-const STRATEGY  = process.env.NEXT_PUBLIC_MOCK_STRATEGY_ADDRESS as `0x${string}`;
+const STRATEGY  = process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS as `0x${string}`;
 const RPC       = process.env.ARBITRUM_SEPOLIA_RPC!;
 
 const VAULT_ABI = parseAbi([
@@ -30,8 +30,8 @@ const GOV_ABI = parseAbi([
 ]);
 
 const STRATEGY_ABI = parseAbi([
-  "function deployedPrincipal() view returns (uint256)",
-  "function pendingYield() view returns (uint256)",
+  "function totalAssets() view returns (uint256)",
+  "function strategyCount() view returns (uint256)",
 ]);
 
 const EPOCH_DURATION = 7n * 24n * 3600n;
@@ -64,8 +64,8 @@ export async function GET() {
       client.readContract({ address: VAULT, abi: VAULT_ABI, functionName: "pendingPenalties" }),
       client.readContract({ address: GOVERNOR, abi: GOV_ABI, functionName: "proposalCount" }),
       client.readContract({ address: GOVERNOR, abi: GOV_ABI, functionName: "latestProposal" }).catch(() => null),
-      client.readContract({ address: STRATEGY, abi: STRATEGY_ABI, functionName: "deployedPrincipal" }).catch(() => 0n),
-      client.readContract({ address: STRATEGY, abi: STRATEGY_ABI, functionName: "pendingYield" }).catch(() => 0n),
+      client.readContract({ address: STRATEGY, abi: STRATEGY_ABI, functionName: "totalAssets" }).catch(() => 0n),
+      client.readContract({ address: STRATEGY, abi: STRATEGY_ABI, functionName: "strategyCount" }).catch(() => 0n),
     ]);
 
     const nowSec = BigInt(Math.floor(Date.now() / 1000));
@@ -116,8 +116,8 @@ export async function GET() {
         } : null,
       },
       strategy: {
-        deployedPrincipal: (strategyPrincipal as bigint).toString(),
-        pendingYield:      (strategyPendingYield as bigint).toString(),
+        totalAssets:    (strategyPrincipal as bigint).toString(),
+        strategyCount:  Number(strategyPendingYield as bigint),
       },
     }, { headers: { "Cache-Control": "no-store" } });
 

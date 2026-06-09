@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createWalletClient, createPublicClient, http, parseAbi, isAddress } from "viem";
+import { createWalletClient, http, parseAbi, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrumSepolia } from "viem/chains";
 
-const FAUCET_AMOUNT = 10_000n * 1_000_000n; // 10,000 USDC (6 decimals)
+// MockUSDC has a public mint() — no faucet balance needed.
+const FAUCET_AMOUNT = 1_000n * 1_000_000n; // 1,000 USDC per drip (6 decimals)
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`;
 const RPC = process.env.ARBITRUM_SEPOLIA_RPC!;
 const FAUCET_KEY = process.env.FAUCET_PRIVATE_KEY as `0x${string}`;
 
-const USDC_ABI = parseAbi(["function mint(address to, uint256 amount) external"]);
+const USDC_ABI = parseAbi([
+  "function mint(address to, uint256 amount)",
+]);
 
 // Simple in-memory rate limit: address → last drip timestamp
 const lastDrip = new Map<string, number>();
@@ -40,10 +43,6 @@ export async function POST(req: NextRequest) {
       chain: arbitrumSepolia,
       transport: http(RPC),
     });
-    const publicClient = createPublicClient({
-      chain: arbitrumSepolia,
-      transport: http(RPC),
-    });
 
     const hash = await walletClient.writeContract({
       address: USDC_ADDRESS,
@@ -52,14 +51,12 @@ export async function POST(req: NextRequest) {
       args: [address as `0x${string}`, FAUCET_AMOUNT],
     });
 
-    await publicClient.waitForTransactionReceipt({ hash });
-
     lastDrip.set(addr, now);
 
     return NextResponse.json({
       success: true,
       txHash: hash,
-      amount: "10000",
+      amount: "1000",
       address,
     });
   } catch (err: unknown) {

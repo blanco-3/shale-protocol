@@ -1,4 +1,5 @@
 "use client";
+import { useState, useEffect } from "react";
 import { useReadContracts } from "wagmi";
 import { VAULT_ADDRESS, VAULT_ABI } from "../../lib/contracts";
 import { formatUsdc } from "../../lib/utils";
@@ -34,20 +35,44 @@ const LEVEL_TABLE = [
   { level: "CRITICAL", threshold: "< 5%",  coreAPY: "2–3%",  desc: "Emergency — all deposits should be paused",color: "text-red-900" },
 ];
 
+function useLastUpdated(dataUpdatedAt: number) {
+  const [label, setLabel] = useState("—");
+  useEffect(() => {
+    if (!dataUpdatedAt) return;
+    const tick = () => {
+      const seconds = Math.floor((Date.now() - dataUpdatedAt) / 1000);
+      if (seconds < 5) setLabel("just now");
+      else if (seconds < 60) setLabel(`${seconds}s ago`);
+      else setLabel(`${Math.floor(seconds / 60)}m ago`);
+    };
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => clearInterval(id);
+  }, [dataUpdatedAt]);
+  return label;
+}
+
 export default function SafetyPage() {
-  const { data } = useReadContracts({
+  const { data, dataUpdatedAt } = useReadContracts({
     contracts: [
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },       // 0
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },       // 1
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },       // 2
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },    // 3
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },    // 4
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "minApexBufferBps" },    // 5
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexBufferGateActive" }, // 6
     ],
+    // Auto-poll every 30 s — safety state should stay fresh without user interaction
+    query: { refetchInterval: 30_000 },
   });
 
   const r = (i: number) => data?.[i]?.status === "success" ? (data[i].result as bigint) : 0n;
   const corePrincipal = r(0), seamPrincipal = r(1), apexPrincipal = r(2);
   const coreMin = r(3), coreMax = r(4);
+  const minApexBufferBps = data?.[5]?.status === "success" ? Number(data[5].result as bigint) : 1500;
+  const gateActive       = data?.[6]?.status === "success" ? (data[6].result as boolean) : false;
+  const minApexPct       = (minApexBufferBps / 100).toFixed(1);
 
   const totalPrincipal = corePrincipal + seamPrincipal + apexPrincipal;
   const apexRatioPct = totalPrincipal > 0n
@@ -57,9 +82,16 @@ export default function SafetyPage() {
   const level = getSafetyLevel(apexRatioPct, totalPrincipal);
   const cfg = LEVEL_CONFIG[level];
 
+  const lastUpdated = useLastUpdated(dataUpdatedAt);
+
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Safety Monitor</h1>
+      <div className="flex justify-between items-baseline mb-2">
+        <h1 className="text-2xl font-bold">Safety Monitor</h1>
+        <span className="text-xs text-gray-400">
+          Auto-refreshes every 30s · updated {lastUpdated}
+        </span>
+      </div>
       <p className="text-sm text-gray-400 mb-6">Real-time protocol health and APEX buffer system</p>
 
       {/* Current status */}
@@ -73,7 +105,7 @@ export default function SafetyPage() {
           <div className="text-right">
             <p className="text-xs text-gray-400 mb-1">APEX Buffer Ratio</p>
             <p className={`text-3xl font-bold font-mono ${cfg.color}`}>{totalPrincipal > 0n ? `${apexRatioPct.toFixed(2)}%` : "—"}</p>
-            <p className="text-xs text-gray-400 mt-1">Min: 10.0%</p>
+            <p className="text-xs text-gray-400 mt-1">Gate threshold: {minApexPct}%</p>
           </div>
         </div>
 
@@ -105,17 +137,21 @@ export default function SafetyPage() {
             {data ? `${(Number(coreMin) / 100).toFixed(1)}–${(Number(coreMax) / 100).toFixed(1)}%` : "—"}
           </p>
         </div>
-        <div className={`border p-4 ${cfg.coreDeposits ? "border-gray-200" : "border-orange-200 bg-orange-50"}`}>
-          <p className="text-xs text-gray-400 mb-1">CORE Deposits</p>
-          <p className={`text-sm font-bold ${cfg.coreDeposits ? "text-green-700" : "text-orange-700"}`}>
-            {cfg.coreDeposits ? "✓ Enabled" : "⚠ Restricted"}
+        <div className={`border p-4 ${!gateActive ? "border-gray-200" : "border-orange-200 bg-orange-50"}`}>
+          <p className="text-xs text-gray-400 mb-1">CORE / SEAM Deposits</p>
+          <p className={`text-sm font-bold ${!gateActive ? "text-green-700" : "text-orange-700"}`}>
+            {!gateActive ? "✓ Enabled" : "⚠ Gated — deposit APEX first"}
           </p>
+          {gateActive && (
+            <p className="text-xs text-orange-600 mt-1">
+              APEX buffer below {minApexPct}% minimum
+            </p>
+          )}
         </div>
-        <div className={`border p-4 ${cfg.apexDeposits ? "border-gray-200" : "border-red-200 bg-red-50"}`}>
+        <div className="border border-gray-200 p-4">
           <p className="text-xs text-gray-400 mb-1">APEX Deposits</p>
-          <p className={`text-sm font-bold ${cfg.apexDeposits ? "text-green-700" : "text-red-700"}`}>
-            {cfg.apexDeposits ? "✓ Enabled" : "✗ Disabled"}
-          </p>
+          <p className="text-sm font-bold text-green-700">✓ Always open</p>
+          <p className="text-xs text-gray-400 mt-1">Replenishes first-loss buffer</p>
         </div>
       </div>
 

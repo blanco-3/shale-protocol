@@ -13,9 +13,39 @@ export function parseUsdc(input: string): bigint {
 }
 
 export const TIERS = [
-  { id: 0, name: "CORE", label: "Stable", description: "First priority yield. CORE depositors receive waterfall yield before other tiers. Lowest risk." },
-  { id: 1, name: "SEAM", label: "Balanced", description: "Second priority. Receives yield after CORE is satisfied. Moderate risk and return." },
-  { id: 2, name: "APEX", label: "Aggressive", description: "Receives all remaining yield after CORE and SEAM. Highest risk, highest upside. APEX principal absorbs shortfalls." },
+  {
+    id: 0,
+    name: "CORE",
+    label: "Stable",
+    description: "Receives yield first, every epoch, regardless of strategy performance. Last in line for any capital loss — APEX and SEAM absorb losses before CORE is touched.",
+    riskLevel: 1 as const,
+    lossPosition: "Last-loss  ③",
+    riskColor: "text-green-700",
+    riskBg: "bg-green-50",
+    profile: "Capital preservation",
+  },
+  {
+    id: 1,
+    name: "SEAM",
+    label: "Balanced",
+    description: "Higher guaranteed APY than CORE. Absorbs losses only after APEX buffer is fully depleted — providing a meaningful safety margin while earning meaningfully more.",
+    riskLevel: 2 as const,
+    lossPosition: "Second-loss  ②",
+    riskColor: "text-yellow-700",
+    riskBg: "bg-yellow-50",
+    profile: "Balanced yield",
+  },
+  {
+    id: 2,
+    name: "APEX",
+    label: "Aggressive",
+    description: "Captures all residual yield after CORE and SEAM are paid. First to absorb any strategy loss — but with leverage on upside: APEX earns proportionally more when strategies outperform.",
+    riskLevel: 3 as const,
+    lossPosition: "First-loss  ①",
+    riskColor: "text-red-700",
+    riskBg: "bg-red-50",
+    profile: "Maximum yield",
+  },
 ] as const;
 
 export type TierId = 0 | 1 | 2;

@@ -26,8 +26,9 @@ contract ShaleGovernor is AccessControl {
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
 
-    uint256 public constant MIN_DELAY = 0;
+    uint256 public minDelay;
 
+    event MinDelayChanged(uint256 oldDelay, uint256 newDelay);
     event ProposalCreated(
         uint256 indexed id,
         address indexed proposer,
@@ -73,16 +74,33 @@ contract ShaleGovernor is AccessControl {
         emit ProposalCreated(proposalId, msg.sender, newCoreMin, newCoreMax, newSeamMin, newSeamMax, reason);
     }
 
+    /**
+     * @notice Execute a proposal after minDelay has elapsed.
+     *
+     * Design intent — permissionless execution:
+     *   Anyone can execute once the delay has passed. This mirrors standard on-chain
+     *   governance (Compound Governor Bravo, OpenZeppelin Governor) where a passed
+     *   proposal is executable by any keeper. The safety window is the delay itself —
+     *   the admin can reject() a malicious proposal before it matures.
+     *
+     *   For mainnet hardening, replace with onlyRole(KEEPER_ROLE) or add a guardian
+     *   multisig that can veto within the delay window.
+     */
     function executeProposal(uint256 proposalId) external {
         Proposal storage p = proposals[proposalId];
         require(!p.executed, "already executed");
         require(!p.rejected, "was rejected");
-        require(block.timestamp >= p.proposedAt + MIN_DELAY, "delay not passed");
+        require(block.timestamp >= p.proposedAt + minDelay, "delay not passed");
 
         p.executed = true;
         vault.updateTargets(p.newCoreMin, p.newCoreMax, p.newSeamMin, p.newSeamMax);
 
         emit ProposalExecuted(proposalId);
+    }
+
+    function setMinDelay(uint256 newDelay) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        emit MinDelayChanged(minDelay, newDelay);
+        minDelay = newDelay;
     }
 
     function rejectProposal(uint256 proposalId) external onlyRole(DEFAULT_ADMIN_ROLE) {

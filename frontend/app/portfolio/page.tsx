@@ -56,34 +56,54 @@ export default function PortfolioPage() {
   const secondsLeft = useEpochCountdown(lastEpochTimestamp);
   const epochReady = secondsLeft === 0;
 
-  // User-specific reads (share balances + previewRedeem for each tier)
+  // User-specific reads:
+  //  [0-2]  share balances per tier
+  //  [3-8]  vault principal + yieldBucket per tier (3 pairs)
+  //  [9-11] totalSupply per tier token (for exchange rate)
   const { data: userData, refetch } = useReadContracts({
     contracts: address && coreTokenAddr && seamTokenAddr && apexTokenAddr ? [
-      { address: coreTokenAddr, abi: ERC20_ABI, functionName: "balanceOf", args: [address] },
-      { address: seamTokenAddr, abi: ERC20_ABI, functionName: "balanceOf", args: [address] },
-      { address: apexTokenAddr, abi: ERC20_ABI, functionName: "balanceOf", args: [address] },
-      // previewRedeem with placeholder shares — will compute manually
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreAccumulatedYield" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamAccumulatedYield" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexAccumulatedYield" },
+      { address: coreTokenAddr,  abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
+      { address: seamTokenAddr,  abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
+      { address: apexTokenAddr,  abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
+      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "corePrincipal" },
+      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "coreAccumulatedYield" },
+      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "seamPrincipal" },
+      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "seamAccumulatedYield" },
+      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "apexPrincipal" },
+      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "apexAccumulatedYield" },
+      { address: coreTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
+      { address: seamTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
+      { address: apexTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
     ] : [],
     query: { enabled: !!address && !!coreTokenAddr },
   });
 
   useEffect(() => { if (isSuccess) refetch(); }, [isSuccess, refetch]);
 
-  const shareBalances = [0, 1, 2].map(i =>
-    userData?.[i]?.status === "success" ? (userData[i].result as bigint) : undefined
-  );
-  // approximate previewRedeem client-side using principal + yield buckets
-  // (avoids needing a separate contract call per user per tier)
-  const tierTotalAssets = [0, 1, 2].map(i => {
-    const principal = userData?.[3 + i * 2]?.status === "success" ? (userData[3 + i * 2].result as bigint) : undefined;
-    const yieldBucket = userData?.[4 + i * 2]?.status === "success" ? (userData[4 + i * 2].result as bigint) : undefined;
-    return principal !== undefined && yieldBucket !== undefined ? principal + yieldBucket : undefined;
+  const g = (i: number): bigint | undefined =>
+    userData?.[i]?.status === "success" ? (userData[i].result as bigint) : undefined;
+
+  const shareBalances = [g(0), g(1), g(2)];
+
+  // Exchange rate per tier: currentValue = shares * (principal + yieldBucket) / totalSupply
+  // This mirrors previewRedeem() in the contract exactly.
+  const currentValues = [0, 1, 2].map(i => {
+    const shares     = shareBalances[i];
+    const principal  = g(3 + i * 2);
+    const yieldBucket = g(4 + i * 2);
+    const totalSupply = g(9 + i);
+    if (shares === undefined) return undefined;
+    if (shares === 0n) return 0n;
+    if (principal === undefined || yieldBucket === undefined || !totalSupply) return shares;
+    return (shares * (principal + yieldBucket)) / totalSupply;
+  });
+
+  // Yield = currentValue − original deposit (shares were minted 1:1 at deposit)
+  const yieldEarned = [0, 1, 2].map(i => {
+    const shares = shareBalances[i];
+    const cv     = currentValues[i];
+    if (shares === undefined || cv === undefined) return undefined;
+    return cv > shares ? cv - shares : 0n;
   });
 
   const busy = isPending || isConfirming;
@@ -152,20 +172,8 @@ export default function PortfolioPage() {
             <tbody>
               {TIERS.map((tier, i) => {
                 const shares = shareBalances[i];
-                const totalAssets = tierTotalAssets[i];
+                const cv     = currentValues[i];
                 const noPosition = shares !== undefined && shares === 0n;
-
-                // estimate current value: shares * totalAssets / totalShareSupply
-                // we use shares as proxy for totalSupply (imprecise if others deposited)
-                // better: previewRedeem would need totalSupply per tier token
-                // for now display shares = principal, value = previewRedeem approximation
-                const currentValue = shares !== undefined && totalAssets !== undefined && shares > 0n
-                  ? shares  // simplified: show shares (1:1 at deposit, grows with yield)
-                  : shares;
-
-                const yieldEarned = shares !== undefined && totalAssets !== undefined && currentValue !== undefined
-                  ? (currentValue > shares ? currentValue - shares : 0n)
-                  : undefined;
 
                 return (
                   <tr key={tier.id} className={`border-b border-gray-100 ${noPosition ? "opacity-40" : ""}`}>
@@ -174,13 +182,15 @@ export default function PortfolioPage() {
                       <span className="text-xs text-gray-400 ml-2">{tier.label}</span>
                     </td>
                     <td className="py-3 text-right font-mono text-xs">
-                      {shares !== undefined ? shares.toString() : "—"}
+                      {shares !== undefined ? (Number(shares) / 1e6).toFixed(2) : "—"}
                     </td>
                     <td className="py-3 text-right font-mono">
-                      {shares !== undefined ? formatUsdc(shares) : "—"}
+                      {cv !== undefined ? formatUsdc(cv) : "—"}
                     </td>
                     <td className="py-3 text-right font-mono text-green-700 text-xs">
-                      {yieldEarned !== undefined && yieldEarned > 0n ? "+" + formatUsdc(yieldEarned) : "—"}
+                      {yieldEarned[i] !== undefined && yieldEarned[i]! > 0n
+                        ? "+" + formatUsdc(yieldEarned[i]!)
+                        : "—"}
                     </td>
                     <td className="py-3 text-right">
                       {!noPosition && shares && shares > 0n && (
@@ -210,6 +220,12 @@ export default function PortfolioPage() {
             </tbody>
           </table>
 
+          {/* Exchange rate note */}
+          <p className="text-xs text-gray-400 mb-2">
+            <span className="font-medium">Current Value</span> reflects the live exchange rate:{" "}
+            <span className="font-mono">shares × (principal + yield) / totalSupply</span>.
+            Yield is distributed at each epoch settlement.
+          </p>
           <p className="text-xs text-gray-400">
             <span className="font-medium">Queue</span> — processed at epoch settlement, no penalty. &nbsp;
             <span className="font-medium text-red-500">Early</span> — immediate, 1% penalty redistributed to remaining depositors.

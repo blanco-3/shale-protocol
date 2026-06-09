@@ -1,3 +1,13 @@
+export interface StrategyData {
+  index:    number;
+  addr:     string;
+  name:     string;
+  weight:   number;
+  deployed: bigint;
+  apyBps:   number;
+  active:   boolean;
+}
+
 export interface VaultState {
   corePrincipal: bigint;
   seamPrincipal: bigint;

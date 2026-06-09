@@ -3,11 +3,10 @@ import { agentWallet, ADDRESSES } from "./config";
 
 const VAULT_ABI = [
   "function lastEpochTimestamp() view returns (uint256)",
+  "function EPOCH_DURATION() view returns (uint256)",
   "function settleEpoch() external",
   "function totalPrincipal() view returns (uint256)",
 ];
-
-const EPOCH_DURATION = 7n * 24n * 3600n; // 7 days
 
 /**
  * Check if the epoch is ready to settle. If so, call settleEpoch().
@@ -16,8 +15,9 @@ const EPOCH_DURATION = 7n * 24n * 3600n; // 7 days
 export async function maybeSettleEpoch(): Promise<void> {
   const vault = new ethers.Contract(ADDRESSES.vault, VAULT_ABI, agentWallet);
 
-  const [lastEpochTimestamp, totalPrincipal]: [bigint, bigint] = await Promise.all([
+  const [lastEpochTimestamp, epochDuration, totalPrincipal]: [bigint, bigint, bigint] = await Promise.all([
     vault.lastEpochTimestamp(),
+    vault.EPOCH_DURATION(),
     vault.totalPrincipal(),
   ]);
 
@@ -27,7 +27,7 @@ export async function maybeSettleEpoch(): Promise<void> {
   }
 
   const nowSec = BigInt(Math.floor(Date.now() / 1000));
-  const nextEpochAt = lastEpochTimestamp + EPOCH_DURATION;
+  const nextEpochAt = lastEpochTimestamp + epochDuration;
 
   if (nowSec < nextEpochAt) {
     const remaining = nextEpochAt - nowSec;

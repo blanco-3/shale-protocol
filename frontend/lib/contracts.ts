@@ -1,7 +1,9 @@
-export const VAULT_ADDRESS   = process.env.NEXT_PUBLIC_VAULT_ADDRESS   as `0x${string}`;
-export const GOVERNOR_ADDRESS = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS as `0x${string}`;
-export const USDC_ADDRESS    = (process.env.NEXT_PUBLIC_USDC_ADDRESS    ?? "0x572A1834ea4783f46aC9069470046B7CdB8dB0fd") as `0x${string}`;
-export const MOCK_STRATEGY_ADDRESS = (process.env.NEXT_PUBLIC_MOCK_STRATEGY_ADDRESS ?? "0x7252b361a493827dcA55822EE37772489f3345AA") as `0x${string}`;
+export const VAULT_ADDRESS           = process.env.NEXT_PUBLIC_VAULT_ADDRESS            as `0x${string}`;
+export const GOVERNOR_ADDRESS        = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS         as `0x${string}`;
+export const USDC_ADDRESS            = (process.env.NEXT_PUBLIC_USDC_ADDRESS            ?? "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d") as `0x${string}`;
+export const STRATEGY_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS ?? "0xe18DaEc58C63B8843DB6043877b30EA36425FE36") as `0x${string}`;
+export const FIXED_YIELD_ADDRESS     = (process.env.NEXT_PUBLIC_FIXED_YIELD_STRATEGY_ADDRESS ?? "0xD01efD103F5eb9706750233f0dcC5AdDa181cfB6") as `0x${string}`;
+export const AAVE_POOL_ADDRESS       = "0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff" as `0x${string}`;
 
 export const VAULT_ABI = [
   // ── Principal & yield buckets ───────────────────────────────────────────
@@ -21,7 +23,11 @@ export const VAULT_ABI = [
   // ── Epoch ───────────────────────────────────────────────────────────────
   { name: "lastEpochTimestamp",  type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "epochCount",          type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "withdrawQueueLength", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "withdrawQueueLength",    type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "queueHead",              type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "minApexBufferBps",       type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "apexBufferBps",          type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "apexBufferGateActive",   type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "bool"    }] },
   // ── Share tokens ────────────────────────────────────────────────────────
   { name: "coreToken", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { name: "seamToken", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
@@ -178,14 +184,72 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-export const MOCK_STRATEGY_ABI = [
-  { name: "deployedPrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "pendingYield",      type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+// Aave V3 Pool — getReserveData returns currentLiquidityRate in RAY (1e27 = 100% APY)
+export const AAVE_POOL_ABI = [
   {
-    name: "addYield",
+    name: "getReserveData",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "asset", type: "address" }],
+    outputs: [{
+      type: "tuple",
+      components: [
+        { name: "configuration",               type: "tuple", components: [{ name: "data", type: "uint256" }] },
+        { name: "liquidityIndex",              type: "uint128" },
+        { name: "currentLiquidityRate",        type: "uint128" },
+        { name: "variableBorrowIndex",         type: "uint128" },
+        { name: "currentVariableBorrowRate",   type: "uint128" },
+        { name: "currentStableBorrowRate",     type: "uint128" },
+        { name: "lastUpdateTimestamp",         type: "uint40"  },
+        { name: "id",                          type: "uint16"  },
+        { name: "aTokenAddress",               type: "address" },
+        { name: "stableDebtTokenAddress",      type: "address" },
+        { name: "variableDebtTokenAddress",    type: "address" },
+        { name: "interestRateStrategyAddress", type: "address" },
+        { name: "accruedToTreasury",           type: "uint128" },
+        { name: "unbacked",                    type: "uint128" },
+        { name: "isolationModeTotalDebt",      type: "uint128" },
+      ],
+    }],
+  },
+] as const;
+
+// FixedYieldStrategy — annualYieldBps() returns configured APY in basis points
+export const FIXED_YIELD_STRATEGY_ABI = [
+  { name: "annualYieldBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+] as const;
+
+export const STRATEGY_ROUTER_ABI = [
+  { name: "strategyCount", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "totalAssets",   type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    name: "getStrategy",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "i", type: "uint256" }],
+    outputs: [
+      { name: "addr",     type: "address" },
+      { name: "weight",   type: "uint16"  },
+      { name: "name",     type: "string"  },
+      { name: "active",   type: "bool"    },
+      { name: "deployed", type: "uint256" },
+    ],
+  },
+  {
+    name: "setWeights",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "amount", type: "uint256" }],
+    inputs: [{ name: "weights", type: "uint16[]" }],
     outputs: [],
+  },
+  { name: "rebalance", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  {
+    name: "Rebalanced",
+    type: "event",
+    inputs: [
+      { name: "timestamp",   type: "uint256", indexed: false },
+      { name: "initiator",   type: "address", indexed: true  },
+      { name: "totalAssets", type: "uint256", indexed: false },
+    ],
   },
 ] as const;

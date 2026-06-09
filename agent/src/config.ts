@@ -16,9 +16,9 @@ export const agentWallet = new ethers.Wallet(
 export const ADDRESSES = {
   vault:            process.env.SHALE_VAULT_ADDRESS!,
   governor:         process.env.SHALE_GOVERNOR_ADDRESS!,
+  router:           process.env.STRATEGY_ROUTER_ADDRESS ?? "",
   mockAavePool:     process.env.MOCK_AAVE_POOL_ADDRESS ?? "",
-  // USDC on Arbitrum Sepolia (Aave testnet faucet token)
-  usdc:             "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+  usdc:             process.env.USDC_ADDRESS ?? "0x90d1969d0f64FDA70b5330b20A61e68491c9221d",
   aavePool:         process.env.AAVE_POOL_ADDRESS ?? "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
   aaveDataProvider: process.env.AAVE_DATA_PROVIDER_ADDRESS ?? "",
 };
