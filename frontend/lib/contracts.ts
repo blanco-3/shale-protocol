@@ -1,9 +1,12 @@
 export const VAULT_ADDRESS           = process.env.NEXT_PUBLIC_VAULT_ADDRESS            as `0x${string}`;
 export const GOVERNOR_ADDRESS        = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS         as `0x${string}`;
-export const USDC_ADDRESS            = (process.env.NEXT_PUBLIC_USDC_ADDRESS            ?? "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d") as `0x${string}`;
-export const STRATEGY_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS ?? "0xe18DaEc58C63B8843DB6043877b30EA36425FE36") as `0x${string}`;
-export const FIXED_YIELD_ADDRESS     = (process.env.NEXT_PUBLIC_FIXED_YIELD_STRATEGY_ADDRESS ?? "0xD01efD103F5eb9706750233f0dcC5AdDa181cfB6") as `0x${string}`;
-export const AAVE_POOL_ADDRESS       = "0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff" as `0x${string}`;
+export const USDC_ADDRESS            = (process.env.NEXT_PUBLIC_USDC_ADDRESS            ?? "0x91BD5E4E9fE9953051A815a6a9A8Fe92E9e7A8d7") as `0x${string}`;
+export const STRATEGY_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS ?? "0x27d0f024c1aE225aFA4366319a9F9F9e63B4610b") as `0x${string}`;
+export const AAVE_STRATEGY_ADDRESS   = (process.env.NEXT_PUBLIC_AAVE_STRATEGY_ADDRESS   ?? "0x29e312Ae6Fe409599D37E6DF3D742869E14BfdBE") as `0x${string}`;
+export const CAMELOT_STRATEGY_ADDRESS = (process.env.NEXT_PUBLIC_FIXED_YIELD_STRATEGY_ADDRESS ?? "0x4BDe068D9DaDDB364Ff7f896AdA0Aa1433b7a8ef") as `0x${string}`;
+export const MORPHO_STRATEGY_ADDRESS  = (process.env.NEXT_PUBLIC_CAMELOT_STRATEGY_ADDRESS    ?? "0x7000eB5469D424b09Cd68AB3D9d634506E51FCEf") as `0x${string}`;
+export const FIXED_YIELD_ADDRESS      = CAMELOT_STRATEGY_ADDRESS; // legacy alias
+export const AAVE_POOL_ADDRESS        = "0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff" as `0x${string}`;
 
 export const VAULT_ABI = [
   // ── Principal & yield buckets ───────────────────────────────────────────
@@ -214,7 +217,99 @@ export const AAVE_POOL_ABI = [
   },
 ] as const;
 
-// FixedYieldStrategy — annualYieldBps() returns configured APY in basis points
+// ─── Sim strategy ABIs ────────────────────────────────────────────────────────
+
+/** SimAaveV3Strategy — Aave V3 two-slope interest rate model */
+export const SIM_AAVE_ABI = [
+  { name: "apyBps",         type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "utilizationBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "deployedPrincipal", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    name: "marketState",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "utilization", type: "uint256" },
+      { name: "supplyApy",   type: "uint256" },
+      { name: "principal",   type: "uint256" },
+      { name: "pending",     type: "uint256" },
+    ],
+  },
+  {
+    name: "setUtilization",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "_bps", type: "uint256" }],
+    outputs: [],
+  },
+] as const;
+
+/** SimCamelotV3Strategy — Uniswap V3 / Camelot LP fee model */
+export const SIM_CAMELOT_ABI = [
+  { name: "apyBps",               type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "dailyVolumeRatioBps",  type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "feeTierBps",           type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "deployedPrincipal",    type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    name: "marketState",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "volumeRatio",   type: "uint256" },
+      { name: "feeTier",       type: "uint256" },
+      { name: "dailyFeeRate",  type: "uint256" },
+      { name: "lpApy",         type: "uint256" },
+      { name: "principal",     type: "uint256" },
+      { name: "pending",       type: "uint256" },
+    ],
+  },
+  {
+    name: "setVolumeRatio",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "_bps", type: "uint256" }],
+    outputs: [],
+  },
+] as const;
+
+/** SimMorphoStrategy — Morpho Blue P2P lending model */
+export const SIM_MORPHO_ABI = [
+  { name: "apyBps",           type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "aaveSupplyBps",    type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "aaveBorrowBps",    type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "matchingRatioBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "deployedPrincipal",type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    name: "marketState",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "supplyApy",     type: "uint256" },
+      { name: "borrowApy",     type: "uint256" },
+      { name: "matchingRatio", type: "uint256" },
+      { name: "p2pRate",       type: "uint256" },
+      { name: "blendedApy",    type: "uint256" },
+      { name: "principal",     type: "uint256" },
+      { name: "pending",       type: "uint256" },
+    ],
+  },
+  {
+    name: "setRates",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "_supplyBps",   type: "uint256" },
+      { name: "_borrowBps",   type: "uint256" },
+      { name: "_matchingBps", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+// Legacy alias
 export const FIXED_YIELD_STRATEGY_ABI = [
   { name: "annualYieldBps", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
 ] as const;

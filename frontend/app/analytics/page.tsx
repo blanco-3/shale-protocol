@@ -5,9 +5,9 @@ import { parseAbiItem } from "viem";
 import {
   VAULT_ADDRESS, VAULT_ABI,
   STRATEGY_ROUTER_ADDRESS, STRATEGY_ROUTER_ABI,
-  AAVE_POOL_ADDRESS, AAVE_POOL_ABI,
-  FIXED_YIELD_ADDRESS, FIXED_YIELD_STRATEGY_ABI,
-  USDC_ADDRESS,
+  AAVE_STRATEGY_ADDRESS, SIM_AAVE_ABI,
+  CAMELOT_STRATEGY_ADDRESS, SIM_CAMELOT_ABI,
+  MORPHO_STRATEGY_ADDRESS, SIM_MORPHO_ABI,
 } from "../../lib/contracts";
 import { formatUsdc, bpsToPercent } from "../../lib/utils";
 
@@ -36,30 +36,39 @@ function useMarketRates() {
   return { rates, loading };
 }
 
-// ── Strategy metadata (matches deployment config) ────────────────────────────
+// ── Strategy metadata ─────────────────────────────────────────────────────────
 
-type StrategyMeta = { protocol: string; asset: string; color: string; description: string };
+type StrategyMeta = { protocol: string; asset: string; color: string; description: string; model: string };
 
-const STRATEGY_META: Record<string, StrategyMeta> = {
-  "AaveV3-USDC": {
+const STRATEGY_META: StrategyMeta[] = [
+  {
     protocol: "Aave V3",
-    asset: "USDC",
+    asset: "USDC/USDT",
     color: "bg-purple-600",
-    description: "Supply USDC to Aave v3 lending pool. Earns variable supply rate. Rate adjusts with market utilisation.",
+    description: "Variable-rate USDC supply. APY derived from pool utilization via two-slope interest rate model.",
+    model: "aave",
   },
-  "FixedYield-USDC": {
-    protocol: "Fixed Yield",
+  {
+    protocol: "Camelot V3 LP",
+    asset: "USDC/USDT",
+    color: "bg-orange-500",
+    description: "Concentrated liquidity LP fees. APY = daily trading volume / TVL × fee tier × 365.",
+    model: "camelot",
+  },
+  {
+    protocol: "Morpho Blue",
     asset: "USDC",
     color: "bg-blue-600",
-    description: "Protocol-owned fixed-rate vault. Simulates Morpho-style term lending at a fixed 7% APY. Yield reserve pre-funded.",
+    description: "P2P lending market. Matched suppliers earn above Aave supply rate, blended with unmatched idle.",
+    model: "morpho",
   },
-};
+];
 
 function getMeta(name: string): StrategyMeta {
-  for (const key of Object.keys(STRATEGY_META)) {
-    if (name.includes(key.split("-")[0])) return STRATEGY_META[key];
-  }
-  return { protocol: name, asset: "USDC", color: "bg-gray-500", description: "" };
+  if (name.toLowerCase().includes("aave"))    return STRATEGY_META[0];
+  if (name.toLowerCase().includes("camelot")) return STRATEGY_META[1];
+  if (name.toLowerCase().includes("morpho"))  return STRATEGY_META[2];
+  return { protocol: name, asset: "USDC", color: "bg-gray-500", description: "", model: "" };
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -115,20 +124,34 @@ function useRebalanceHistory() {
   return { events, loading };
 }
 
-// ── Strategy live APY hook ────────────────────────────────────────────────────
+// ── Sim strategy APY + market state hooks ─────────────────────────────────────
 
-function useStrategyAPY() {
-  const RAY = BigInt("1000000000000000000000000000"); // 1e27
+type AaveState    = { utilization: bigint; supplyApy: bigint; principal: bigint; pending: bigint };
+type CamelotState = { volumeRatio: bigint; feeTier: bigint; dailyFeeRate: bigint; lpApy: bigint; principal: bigint; pending: bigint };
+type MorphoState  = { supplyApy: bigint; borrowApy: bigint; matchingRatio: bigint; p2pRate: bigint; blendedApy: bigint; principal: bigint; pending: bigint };
+
+function useSimStrategies() {
   const { data } = useReadContracts({
     contracts: [
-      { address: AAVE_POOL_ADDRESS,   abi: AAVE_POOL_ABI,            functionName: "getReserveData", args: [USDC_ADDRESS] },
-      { address: FIXED_YIELD_ADDRESS, abi: FIXED_YIELD_STRATEGY_ABI, functionName: "annualYieldBps" },
+      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "apyBps"      },
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps"      },
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps"      },
+      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "marketState" },
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "marketState" },
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "marketState" },
     ],
   });
-  const aaveReserve  = data?.[0]?.status === "success" ? (data[0].result as { currentLiquidityRate: bigint }) : null;
-  const aaveApyBps   = aaveReserve ? Number(aaveReserve.currentLiquidityRate * 10000n / RAY) : null;
-  const fixedYieldBps = data?.[1]?.status === "success" ? Number(data[1].result as bigint) : null;
-  return { aaveApyBps, fixedYieldBps };
+
+  const apyByAddr: Record<string, number> = {};
+  if (data?.[0]?.status === "success") apyByAddr[AAVE_STRATEGY_ADDRESS.toLowerCase()]    = Number(data[0].result as bigint);
+  if (data?.[1]?.status === "success") apyByAddr[CAMELOT_STRATEGY_ADDRESS.toLowerCase()] = Number(data[1].result as bigint);
+  if (data?.[2]?.status === "success") apyByAddr[MORPHO_STRATEGY_ADDRESS.toLowerCase()]  = Number(data[2].result as bigint);
+
+  const aaveState    = data?.[3]?.status === "success" ? (data[3].result as unknown as AaveState)    : null;
+  const camelotState = data?.[4]?.status === "success" ? (data[4].result as unknown as CamelotState) : null;
+  const morphoState  = data?.[5]?.status === "success" ? (data[5].result as unknown as MorphoState)  : null;
+
+  return { apyByAddr, aaveState, camelotState, morphoState };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -315,22 +338,15 @@ export default function AnalyticsPage() {
 
   const { epochs, histLoading, histError } = useEpochHistory();
   const { strategies: routerStrategies, routerTotal } = useStrategyAllocations();
-  const { aaveApyBps, fixedYieldBps } = useStrategyAPY();
+  const { apyByAddr, aaveState, camelotState, morphoState } = useSimStrategies();
   const { rates: marketRates, loading: ratesLoading } = useMarketRates();
   const { events: rebalanceEvents, loading: rebalanceLoading } = useRebalanceHistory();
 
-  // Map strategy name → live APY bps
-  function strategyApyBps(name: string): number | null {
-    if (name.includes("Aave"))  return aaveApyBps;
-    if (name.includes("Fixed")) return fixedYieldBps;
-    return null;
-  }
-
-  // Blended strategy APY from live reads
-  const blendedBps = routerStrategies.length > 0 && aaveApyBps !== null && fixedYieldBps !== null
+  // Blended strategy APY weighted by current allocation
+  const blendedBps = routerStrategies.length > 0 && Object.keys(apyByAddr).length > 0
     ? Math.round(
         routerStrategies.reduce((sum, s) => {
-          const apyB = strategyApyBps(s.name);
+          const apyB = apyByAddr[s.addr.toLowerCase()] ?? null;
           return sum + (apyB !== null ? apyB * s.weight : 0);
         }, 0) / 10_000
       )
@@ -598,44 +614,34 @@ export default function AnalyticsPage() {
           <p className="px-4 py-6 text-xs text-gray-400">Loading strategy data…</p>
         ) : (
           <div className="divide-y divide-gray-100">
-            {routerStrategies.map((s, idx) => {
-              const meta     = getMeta(s.name);
-              const apyBps   = strategyApyBps(s.name);
-              const actualPct = routerTotal > 0n
-                ? Number((s.deployed * 10000n) / routerTotal) / 100
-                : 0;
+            {routerStrategies.map((s) => {
+              const meta      = getMeta(s.name);
+              const stratApy  = apyByAddr[s.addr.toLowerCase()] ?? null;
+              const actualPct = routerTotal > 0n ? Number((s.deployed * 10000n) / routerTotal) / 100 : 0;
               const targetPct = s.weight / 100;
-              const drift = Math.abs(actualPct - targetPct).toFixed(1);
+              const drift     = Math.abs(actualPct - targetPct).toFixed(1);
 
               return (
                 <div key={s.addr} className="p-4">
-                  {/* Strategy header */}
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${meta.color} mt-0.5 flex-shrink-0`} />
                       <div>
                         <span className="text-sm font-bold">{meta.protocol}</span>
-                        <span className="text-xs text-gray-400 ml-2">·  {meta.asset}  ·  Arbitrum Sepolia</span>
-                        {!s.active && (
-                          <span className="text-xs text-gray-400 border border-gray-200 px-1 ml-2">inactive</span>
-                        )}
+                        <span className="text-xs text-gray-400 ml-2">· {meta.asset} · Arbitrum Sepolia</span>
+                        {!s.active && <span className="text-xs text-gray-400 border border-gray-200 px-1 ml-2">inactive</span>}
                       </div>
                     </div>
                     <div className="text-right">
-                      {apyBps !== null ? (
+                      {stratApy !== null ? (
                         <span className="text-sm font-bold font-mono text-green-700">
-                          {(apyBps / 100).toFixed(2)}% APY
-                          <span className="text-xs text-green-500 ml-1">{idx === 0 ? "live" : "fixed"}</span>
+                          {(stratApy / 100).toFixed(2)}% APY
+                          <span className="text-xs text-green-500 ml-1">live</span>
                         </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
+                      ) : <span className="text-xs text-gray-400">—</span>}
                     </div>
                   </div>
-
                   <p className="text-xs text-gray-400 mb-3 ml-4">{meta.description}</p>
-
-                  {/* Allocation bar */}
                   <div className="ml-4">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span className="font-mono">{formatUsdc(s.deployed)} deployed</span>
@@ -645,34 +651,157 @@ export default function AnalyticsPage() {
                         </span>
                         <span className="text-gray-300 mx-1">/</span>
                         <span className="font-mono">{targetPct.toFixed(0)}% target</span>
-                        {parseFloat(drift) > 1 && (
-                          <span className="text-orange-500 ml-1">(±{drift}%)</span>
-                        )}
+                        {parseFloat(drift) > 1 && <span className="text-orange-500 ml-1">(±{drift}%)</span>}
                       </span>
                     </div>
                     <div className="h-2 bg-gray-100 w-full relative">
-                      <div
-                        className={`h-2 transition-all ${meta.color}`}
-                        style={{ width: `${Math.min(actualPct, 100)}%` }}
-                      />
-                      <div
-                        className="absolute top-0 h-2 w-0.5 bg-gray-500"
-                        style={{ left: `${Math.min(targetPct, 100)}%` }}
-                        title={`Target: ${targetPct.toFixed(0)}%`}
-                      />
+                      <div className={`h-2 transition-all ${meta.color}`} style={{ width: `${Math.min(actualPct, 100)}%` }} />
+                      <div className="absolute top-0 h-2 w-0.5 bg-gray-500" style={{ left: `${Math.min(targetPct, 100)}%` }} />
                     </div>
-                    <p className="text-xs text-gray-300 mt-0.5">
-                      ▎ = target weight
-                    </p>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-
         <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-400">
           AI agent monitors allocation drift and triggers rebalancing when actual weight diverges from target by more than the configured threshold.
+        </div>
+      </div>
+
+      {/* Protocol Market Mechanics ───────────────────────────────────────────── */}
+      <div className="border border-gray-200 mb-8">
+        <div className="px-4 py-3 border-b border-gray-200">
+          <p className="text-sm font-bold">Protocol Market Mechanics</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            APY derived from real DeFi protocol models — not fixed rates
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+
+          {/* Aave V3 — utilization curve */}
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-purple-600" />
+              <span className="text-xs font-bold text-purple-700">Aave V3 Interest Rate Model</span>
+            </div>
+            {aaveState ? (
+              <>
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Pool Utilization</span>
+                    <span className="font-mono font-bold">{(Number(aaveState.utilization) / 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="h-3 bg-gray-100 w-full relative">
+                    <div className="h-3 bg-purple-500 transition-all" style={{ width: `${Number(aaveState.utilization) / 100}%` }} />
+                    {/* Kink at 80% */}
+                    <div className="absolute top-0 h-3 w-0.5 bg-gray-400" style={{ left: "80%" }} title="Optimal (kink) at 80%" />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-300 mt-0.5">
+                    <span>0%</span>
+                    <span className="text-gray-400">kink 80%</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">slope1 (below kink)</span>
+                    <span>7.00%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">slope2 (above kink)</span>
+                    <span>75.00%</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
+                    <span className="text-gray-600 font-bold">Supply APY</span>
+                    <span className="text-purple-700 font-bold">{(Number(aaveState.supplyApy) / 100).toFixed(2)}%</span>
+                  </div>
+                </div>
+              </>
+            ) : <p className="text-xs text-gray-400">Loading…</p>}
+          </div>
+
+          {/* Camelot V3 — LP fee model */}
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              <span className="text-xs font-bold text-orange-600">Camelot V3 LP Fee Model</span>
+            </div>
+            {camelotState ? (
+              <>
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Daily Volume / TVL</span>
+                    <span className="font-mono font-bold">{(Number(camelotState.volumeRatio) / 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="h-3 bg-gray-100 w-full">
+                    <div className="h-3 bg-orange-400 transition-all" style={{ width: `${Math.min(Number(camelotState.volumeRatio) / 200, 100)}%` }} />
+                  </div>
+                  <p className="text-xs text-gray-300 mt-0.5">bar scaled to 200% TVL max</p>
+                </div>
+                <div className="space-y-1 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">fee tier</span>
+                    <span>{(Number(camelotState.feeTier) / 100).toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">daily fee rate</span>
+                    <span>{(Number(camelotState.dailyFeeRate) / 100).toFixed(3)}% / day</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
+                    <span className="text-gray-600 font-bold">LP APY</span>
+                    <span className="text-orange-600 font-bold">{(Number(camelotState.lpApy) / 100).toFixed(2)}%</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  APY = vol/TVL × feeTier × 365 — standard Uniswap V3 analytics formula
+                </p>
+              </>
+            ) : <p className="text-xs text-gray-400">Loading…</p>}
+          </div>
+
+          {/* Morpho — P2P rate model */}
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-blue-600" />
+              <span className="text-xs font-bold text-blue-700">Morpho Blue P2P Model</span>
+            </div>
+            {morphoState ? (
+              <>
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Matching Ratio (P2P)</span>
+                    <span className="font-mono font-bold">{(Number(morphoState.matchingRatio) / 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="h-3 bg-gray-100 w-full">
+                    <div className="h-3 bg-blue-500 transition-all" style={{ width: `${Number(morphoState.matchingRatio) / 100}%` }} />
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Aave supply rate</span>
+                    <span>{(Number(morphoState.supplyApy) / 100).toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Aave borrow rate</span>
+                    <span>{(Number(morphoState.borrowApy) / 100).toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">P2P rate (midpoint)</span>
+                    <span>{(Number(morphoState.p2pRate) / 100).toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
+                    <span className="text-gray-600 font-bold">Blended APY</span>
+                    <span className="text-blue-700 font-bold">{(Number(morphoState.blendedApy) / 100).toFixed(2)}%</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Blended = matched% × P2P + unmatched% × supply
+                </p>
+              </>
+            ) : <p className="text-xs text-gray-400">Loading…</p>}
+          </div>
         </div>
       </div>
 
