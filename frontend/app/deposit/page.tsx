@@ -65,12 +65,15 @@ export default function DepositPage() {
   }
 
   function handleApprove() {
-    writeContract({
-      address: USDC_ADDRESS,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [VAULT_ADDRESS, parsedAmount],
-    });
+    writeContract(
+      {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [VAULT_ADDRESS, parsedAmount],
+      },
+      { onSuccess: () => refetchAllowance() }
+    );
   }
 
   function handleDeposit() {
@@ -92,7 +95,7 @@ export default function DepositPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setFaucetMsg("10,000 USDC sent! Tx: " + data.txHash.slice(0, 10) + "...");
+        setFaucetMsg("1,000 USDC sent! Tx: " + data.txHash.slice(0, 10) + "...");
         refetchBalance();
       } else {
         setFaucetMsg(data.error ?? "Faucet error");
