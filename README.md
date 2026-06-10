@@ -2,120 +2,149 @@
 
 AI-managed, adaptive, multi-strategy yield vault on Arbitrum Sepolia.
 
-Users deposit USDC into one of three risk tiers — **CORE**, **SEAM**, or **APEX**. An off-chain AI agent continuously monitors yield conditions and proposes on-chain parameter adjustments via a governor contract. A waterfall distribution mechanism ensures CORE receives yield first, then SEAM, then APEX collects the remainder (leverage effect).
+Users deposit USDC into one of three risk tiers — **CORE**, **SEAM**, or **APEX** — and receive tokenized shares. An off-chain AI agent (Groq / Llama-3.3-70b) continuously monitors yield conditions across three simulated DeFi strategies (Aave V3, Camelot V3, Morpho) and rebalances capital allocation autonomously. A CDO-style waterfall distributes earned yield: CORE receives first, SEAM second, APEX collects all residual — giving APEX holders leveraged upside at the cost of first-loss exposure.
 
-**Core principle:** The agent never directly moves user funds. It only calls `proposeRebalance()` on the Governor. A frontend Accept button triggers `executeProposal()`. All agent decisions are recorded permanently on-chain as events with a reason string.
+---
+
+## Live Demo
+
+**Frontend:** [https://shale-frontend-971342541474.us-central1.run.app](https://shale-frontend-971342541474.us-central1.run.app)
+*(Arbitrum Sepolia — use the in-app faucet to get test USDC)*
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Off-chain Agent                    │
-│  Reads APY → Assesses target drift → proposeRebalance│
-└──────────────────────┬──────────────────────────────┘
-                       │ proposeRebalance()
-                       ▼
-┌─────────────────────────────────────────────────────┐
-│                 ShaleGovernor                        │
-│  Stores proposals on-chain with reason string        │
-│  executeProposal() → vault.updateTargets()           │
-└──────────────────────┬──────────────────────────────┘
-                       │ updateTargets() [GOVERNOR_ROLE]
-                       ▼
-┌─────────────────────────────────────────────────────┐
-│                  ShaleVault                          │
-│  deposit() → Aave supply → mint shlCORE/SEAM/APEX   │
-│  settleEpoch() → waterfall yield distribution        │
-│  withdraw() → burn shares → Aave withdraw → USDC     │
-└──────────────────────┬──────────────────────────────┘
-                       │ supply/withdraw
-                       ▼
-              MockAavePool (testnet)
-              Real Aave V3 (mainnet)
+┌──────────────────────────────────────────────────────────────────┐
+│                        AI Agent (Cloud Run)                       │
+│  Groq/Llama-3.3-70b — reads APY trend → rebalances weights       │
+│  Falls back to rule-based algorithm if LLM unavailable           │
+└───────────────────┬──────────────────────┬───────────────────────┘
+                    │ proposeRebalance()    │ setWeights() + rebalance()
+                    ▼                      ▼
+┌──────────────────────────┐   ┌───────────────────────────────────┐
+│      ShaleGovernor        │   │          StrategyRouter            │
+│  Stores proposals on-chain│   │  Routes USDC to sub-strategies     │
+│  5-min timelock (demo)    │   │  by weight (bps, sum=10000)        │
+│  executeProposal() calls  │   │  harvest() mints MockUSDC yield    │
+│  vault.updateTargets()    │   └──────────┬────────────────────────┘
+└──────────────────────────┘              │
+                    │                     │ deposit/harvest/withdraw
+                    ▼                     ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                         ShaleVault                                │
+│  deposit(amount, tier) → mint shlCORE / shlSEAM / shlAPEX        │
+│  settleEpoch() → waterfall: CORE first, SEAM second, APEX rest    │
+│  APEX buffer gate: CORE/SEAM deposits blocked if APEX < 15% TVL  │
+│  Loss absorption: APEX absorbs first → SEAM → CORE               │
+└──────────────────────────────────────────────────────────────────┘
+              │                    │                   │
+              ▼                    ▼                   ▼
+   SimAaveV3Strategy     SimCamelotV3Strategy    SimMorphoStrategy
+   Two-slope IR model    LP fee APY model        P2P blended rate
+   util → supply APY     volume × feeTier        matched + unmatched
+   ~5.7% APY (demo)      ~7.3% APY (demo)        ~3.4% APY (demo)
+   weight: 30%           weight: 50%             weight: 20%
 ```
 
-### Waterfall Logic
+### CDO Waterfall
 
 ```
-Total yield from Aave:
-  1. CORE gets its target first  (e.g. 4% annualized pro-rata)
-  2. SEAM gets its target second (e.g. 2% annualized pro-rata)
-  3. APEX gets all remainder     (leverage effect — variable upside)
+Epoch yield from strategies:
+  1. CORE tier receives its APY target first  (e.g. 3.0–4.5%)
+  2. SEAM tier receives its target second     (e.g. 5.0–7.0%)
+  3. APEX collects all remainder              → leveraged residual (~10%+ demo)
 
-If yield < CORE target:
-  APEX principal absorbs the deficit first → then SEAM → then CORE
+If total yield < CORE + SEAM combined targets:
+  → APEX principal absorbs the shortfall first (first-loss buffer)
+  → Then SEAM principal, then CORE last
 ```
 
-### Repository Structure
+---
 
-```
-shale-protocol/
-├── contracts/          # Foundry — Solidity contracts + tests
-│   ├── src/
-│   │   ├── ShaleVault.sol
-│   │   ├── ShaleGovernor.sol
-│   │   ├── ShaleShare.sol
-│   │   ├── MockAavePool.sol    # Testnet mock
-│   │   ├── MockUSDC.sol        # Freely mintable test USDC
-│   │   └── interfaces/
-│   ├── test/
-│   │   └── ShaleVault.t.sol    # 10 tests
-│   └── script/
-│       └── Deploy.s.sol
-│
-├── agent/              # Node.js / TypeScript — off-chain AI agent
-│   └── src/
-│       ├── index.ts    # Entry + cron loop
-│       ├── aave.ts     # Fetch APY
-│       ├── vault.ts    # Read vault state
-│       └── proposer.ts # Decision logic + submit proposal
-│
-└── frontend/           # Next.js 16, wagmi v2
-    ├── app/
-    │   ├── page.tsx            # Dashboard
-    │   ├── deposit/page.tsx
-    │   └── portfolio/page.tsx
-    └── components/
-        ├── TierCard.tsx
-        ├── AgentPanel.tsx
-        └── NavBar.tsx
-```
+## Key Features
+
+| Feature | Description |
+|---|---|
+| **Three-tier CDO** | CORE (senior), SEAM (mezzanine), APEX (junior/first-loss). Loss absorption is real — APEX NAV drops before other tiers. |
+| **AI rebalancer** | Groq/Llama assesses blended APY trend across 3 strategies. Falls back to APY-proportional algorithm if LLM fails. |
+| **On-chain transparency** | Every agent decision recorded on-chain via `proposeRebalance()` with a human-readable reason string. |
+| **APEX buffer gate** | CORE/SEAM deposits automatically blocked when `apexTVL / totalTVL < 15%`. Enforced in the contract. |
+| **Social login** | Reown AppKit — Google, X, GitHub, Discord, Farcaster, or any EVM wallet. |
+| **In-app faucet** | `/api/faucet` mints 1,000 test USDC to any connected wallet. No Etherscan needed. |
+| **Permissionless settlement** | `settleEpoch()` callable by anyone after epoch duration. Agent calls it automatically. |
+| **Analytics page** | Live gauges showing Aave utilization curve, Camelot volume/fee, Morpho P2P spread. |
+| **Safety page** | APEX buffer monitor, real-time health indicator, auto-polls every 30 seconds. |
+| **Scenario modeling** | What-if simulator for APEX APY under different TVL splits and blended APY assumptions. |
 
 ---
 
 ## Deployed Contracts — Arbitrum Sepolia
 
-| Contract | Address |
-|---|---|
-| ShaleVault | `0x2dB82cF07659eA659df82C393bB3dB29C5DB09BC` |
-| ShaleGovernor | `0x070a41073D59B71eeCb92cA8ba41AE2a293a72B0` |
-| MockUSDC | `0x7e798cBfCEFb5E36341020e17137fd5CA00BEf01` |
-| MockAavePool | `0xB150c04A5e4FAB33dD601b0190fbb1beEF711490` |
-| shlCORE | `0x57E171AB548ab4C597fe7e4406c66334932D5d0D` |
-| shlSEAM | `0x3f90f2C1B8762A8576C434fa7f3C01Fca196742a` |
-| shlAPEX | `0x30F473b7A35EB1106F90E22b72F6D0665d7d327C` |
+| Contract | Address | Note |
+|---|---|---|
+| MockUSDC | `0x91BD5E4E9fE9953051A815a6a9A8Fe92E9e7A8d7` | Freely mintable test USDC (6 decimals) |
+| ShaleVault | `0x3989a0E6450903f60Aa42A82fF1C9c44C24622DC` | Main vault (CDO + epoch settlement) |
+| ShaleGovernor | `0xc21DAf89edAeBb9B6def2F71b4d5bd71e9AC23F1` | AI proposals + timelock |
+| StrategyRouter | `0x27d0f024c1aE225aFA4366319a9F9F9e63B4610b` | Weight-based capital router |
+| SimAaveV3 | `0x29e312Ae6Fe409599D37E6DF3D742869E14BfdBE` | Two-slope IR model (util 65% → 5.7% APY) |
+| SimCamelotV3 | `0x4BDe068D9DaDDB364Ff7f896AdA0Aa1433b7a8ef` | LP fee model (vol 40% → 7.3% APY) |
+| SimMorpho | `0x7000eB5469D424b09Cd68AB3D9d634506E51FCEf` | P2P blended (P2P 40% → 3.4% APY) |
+| Agent wallet | `0x22a90658cdCDbDf89841ca2d37EfC489dE9Bb71A` | KEEPER_ROLE + PROPOSER_ROLE |
+
+---
+
+## Strategy APY Models
+
+### SimAaveV3 — Two-slope Interest Rate
+```
+Below kink (util ≤ optimalUtil):
+  supplyAPY = slope1 × util / kink
+
+Above kink:
+  supplyAPY = slope1 + slope2 × (util - kink) / (1 - kink)
+
+marketAdmin.setUtilization(bps) changes APY in real-time for demos.
+```
+
+### SimCamelotV3 — LP Fee APY
+```
+dailyFeeRate = volumeRatioBps × feeTierBps / 10000
+annualAPY    = dailyFeeRate × 365
+
+marketAdmin.setVolumeRatio(bps) simulates trading activity changes.
+```
+
+### SimMorpho — P2P Blended Rate
+```
+p2pMid    = (supplyRate + borrowRate) / 2
+blended   = matchedFraction × p2pMid + (1 - matchedFraction) × supplyRate
+
+marketAdmin.setRates(supply, borrow, matching) updates market conditions.
+```
+
+Yield is minted via `MockUSDC.mint()` — no external reserve required.
 
 ---
 
 ## Quick Start
 
-### 1. Contracts
+### 1. Contracts (Foundry)
 
 ```bash
 cd contracts
-forge install   # installs forge-std and openzeppelin-contracts
+forge install
 forge build
-forge test      # 10 tests, all passing
+forge test   # 62/62 passing
 ```
 
-Deploy (MockUSDC + MockAavePool + full protocol):
+Deploy full suite (SimAave + SimCamelot + SimMorpho + Router + Vault + Governor):
 
 ```bash
 DEPLOYER_ADDRESS=0x... \
 AGENT_WALLET_ADDRESS=0x... \
-forge script script/Deploy.s.sol \
+forge script script/DeployV4.s.sol \
   --rpc-url $ARBITRUM_SEPOLIA_RPC \
   --private-key $DEPLOYER_PRIVATE_KEY \
   --broadcast
@@ -126,113 +155,139 @@ forge script script/Deploy.s.sol \
 ```bash
 cd agent
 npm install
-cp .env.example .env   # fill in deployed addresses + RPC + private key
+cp .env.example .env   # fill in addresses, RPC, keys
 npm run dev
 ```
 
-The agent runs immediately on start, then every 15 minutes via cron.
-It reads `MockAavePool.apyBps()`, computes ideal CORE target (65% of APY),
-and submits `proposeRebalance()` if drift > 50 bps.
+The agent runs on start then every 2 minutes (configurable via `CRON_SCHEDULE`).
+
+Loop:
+1. `maybeSettleEpoch()` — settles if epoch duration has passed
+2. Read vault state + Aave APY in parallel
+3. `maybeRebalance()` — LLM decides strategy weights, calls `StrategyRouter.setWeights()` + `rebalance()`
+4. `assessMarket()` — LLM decides if APY targets need updating, calls `ShaleGovernor.proposeRebalance()` if drift > 50 bps
 
 ### 3. Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.local.example .env.local   # fill in vault + governor addresses
+cp .env.local.example .env.local   # fill in addresses + API keys
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Connect MetaMask (Arbitrum Sepolia). Get test USDC by calling `MockUSDC.mint(yourAddress, amount)` or via cast:
-
-```bash
-cast send 0x7e798cBfCEFb5E36341020e17137fd5CA00BEf01 \
-  "mint(address,uint256)" YOUR_ADDRESS 10000000000 \
-  --rpc-url $ARBITRUM_SEPOLIA_RPC --private-key $YOUR_KEY
-```
+All contract addresses have hardcoded fallbacks pointing at the live Arbitrum Sepolia deployment — the frontend works out-of-the-box without `.env.local`.
 
 ---
 
 ## Demo Flow
 
-1. Connect MetaMask → Arbitrum Sepolia
-2. **Deposit** page → select CORE → Approve USDC → Deposit $500
-3. **Deposit** page → select APEX → Deposit $300
-4. Agent submits a `proposeRebalance()` proposal (visible in Agent Panel on Dashboard)
-5. **Dashboard** → Agent Panel → click **Accept →** → confirm MetaMask tx
-6. Vault targets update on-chain (visible in CORE/SEAM cards)
-7. After 7 days (or `vm.warp` on fork), call **Settle Epoch** from Portfolio page
-8. **Portfolio** page shows accrued yield split per tier
+1. Visit the live frontend and connect a wallet (or use social login)
+2. **Faucet** — click "Get 1,000 USDC" on the Deposit page
+3. **Deposit** — select APEX first (to satisfy the buffer gate), then CORE or SEAM
+4. **Dashboard** — watch the Agent Panel for the AI's latest rebalance decision and reason
+5. **Analytics** — adjust market parameters (utilization, volume, P2P spread) to see APY change live
+6. **Safety** — monitor APEX buffer health in real time
+7. **Scenarios** — model what-if APY outcomes at different TVL compositions
+8. **Portfolio** — view your position and accrued yield per tier
 
-To trigger an immediate agent decision for demo, change `MockAavePool.apyBps`:
+To trigger a manual epoch settlement (normally done by the agent):
 
 ```bash
-cast send 0xB150c04A5e4FAB33dD601b0190fbb1beEF711490 \
-  "setApyBps(uint256)" 150 \
-  --rpc-url $ARBITRUM_SEPOLIA_RPC --private-key $YOUR_KEY
+cast send 0x3989a0E6450903f60Aa42A82fF1C9c44C24622DC \
+  "settleEpoch()" \
+  --rpc-url https://sepolia-rollup.arbitrum.io/rpc \
+  --private-key $YOUR_KEY
 ```
 
-This sets APY to 1.5% — well below the current CORE target — and the agent will propose a LOWER on the next cron tick.
+---
+
+## Repository Structure
+
+```
+shale-protocol/
+├── contracts/
+│   ├── src/
+│   │   ├── ShaleVault.sol           # CDO vault, epoch settlement, loss absorption
+│   │   ├── ShaleGovernor.sol        # On-chain AI proposal registry + timelock
+│   │   ├── ShaleShare.sol           # ERC-20 tier share token (shlCORE/SEAM/APEX)
+│   │   ├── StrategyRouter.sol       # Weight-based capital router
+│   │   ├── SimAaveV3Strategy.sol    # Aave two-slope IR simulation
+│   │   ├── SimCamelotV3Strategy.sol # Camelot LP fee simulation
+│   │   ├── SimMorphoStrategy.sol    # Morpho P2P rate simulation
+│   │   └── interfaces/
+│   ├── test/
+│   │   ├── ShaleVaultTest.t.sol     # 20 vault tests
+│   │   ├── StrategyTest.t.sol       # 16 strategy router tests
+│   │   └── SimStrategyTest.t.sol    # 26 sim strategy tests
+│   └── script/
+│       └── DeployV4.s.sol           # Full deployment (active)
+│
+├── agent/
+│   └── src/
+│       ├── index.ts      # Entry + cron loop + EpochSettled listener
+│       ├── config.ts     # Addresses, provider, wallet
+│       ├── rebalancer.ts # LLM → setWeights() + rebalance()
+│       ├── proposer.ts   # LLM → proposeRebalance() (APY targets)
+│       ├── settler.ts    # maybeSettleEpoch()
+│       ├── llm.ts        # Groq client + JSON parser
+│       ├── scanner.ts    # On-chain event reader
+│       ├── vault.ts      # readVaultState()
+│       └── aave.ts       # fetchAaveAPYBps()
+│
+└── frontend/
+    ├── app/
+    │   ├── page.tsx           # Dashboard: TVL, tier stats, blended APY, agent panel
+    │   ├── deposit/page.tsx   # Deposit flow: approve → deposit (single UX, two sigs)
+    │   ├── portfolio/page.tsx # User positions + tier breakdown
+    │   ├── analytics/page.tsx # Protocol Market Mechanics (live gauges)
+    │   ├── safety/page.tsx    # APEX buffer monitor
+    │   └── scenarios/page.tsx # What-if APY scenario modeling
+    ├── components/
+    │   └── TierCard.tsx
+    └── lib/
+        ├── contracts.ts  # ABIs + addresses (hardcoded fallbacks)
+        ├── wagmi.ts      # Reown AppKit + wagmi config
+        └── utils.ts
+```
 
 ---
 
-## Current Implementation State
+## Test Results
 
-### Working
+```
+forge test --summary
 
-| Component | Status |
-|---|---|
-| ShaleVault — deposit / withdraw / settleEpoch | ✅ |
-| ShaleGovernor — propose / execute / reject | ✅ |
-| Waterfall epoch distribution | ✅ |
-| Yield-per-share accounting (no rebase) | ✅ |
-| MockUSDC (free mint) + MockAavePool (configurable APY) | ✅ |
-| Foundry tests — 10/10 passing | ✅ |
-| Agent — cron loop, APY read, propose on-chain | ✅ |
-| Frontend — dashboard, deposit, portfolio pages | ✅ |
-| Agent proposals visible + Accept button on frontend | ✅ |
+ShaleVaultTest   (20/20)  deposit, withdraw, epoch settlement, loss absorption,
+                           APEX buffer gate, withdrawal queue, role access control
+StrategyTest     (16/16)  router weights, rebalance flow, keeper auth, multi-strategy
+SimStrategyTest  (26/26)  APY formula correctness, market event scenarios,
+                           cross-strategy ordering, deposit/harvest mint flow,
+                           access control, utilization bounds
 
-### Limitations / Known Issues
-
-| Item | Detail |
-|---|---|
-| **Mock APY is static** | `MockAavePool.apyBps()` returns a hardcoded value (4.20%). It must be changed manually via `setApyBps()` to simulate market movement. The agent has no feedback loop to change APY itself. |
-| **Agent always proposes LOWER** | Because mock APY (4.20%) × 0.65 = 2.73% < default CORE target (4.00%), the agent will keep proposing LOWER every 15 min until a proposal is accepted and the target drops to ~2.73%. After that, it will HOLD. |
-| **Epoch settlement needs 7 days** | `settleEpoch()` reverts unless `block.timestamp >= lastEpochTimestamp + 7 days`. No demo shortcut built into contracts. Use an Anvil fork with `vm.warp` for local demos. |
-| **No automated epoch settlement** | The agent only proposes rebalances. It does not call `settleEpoch()` automatically. Users must trigger it manually from the Portfolio page. |
-| **No WalletConnect** | RainbowKit removed to avoid needing a WalletConnect Cloud project ID. Only MetaMask (injected connector) works. |
-| **No Vercel deployment** | Frontend runs locally only (`localhost:3420`). |
-| **No faucet UI** | Users must call `MockUSDC.mint()` via cast or Etherscan to get test USDC. |
-| **Real Aave not tested** | `USE_MOCK_AAVE=false` path exists in code but was not tested end-to-end. Aave V3 on Arbitrum Sepolia may have different or outdated addresses. |
-| **No access control on settleEpoch** | Anyone can call it after 7 days. This is intentional (permissionless) but noted. |
-
-### Not Implemented
-
-- [ ] Multi-asset support (USDC only)
-- [ ] Slippage / max-deposit caps
-- [ ] Agent debate / multi-model consensus (referenced in spec)
-- [ ] Proposal timelock delay (hardcoded to 0)
-- [ ] On-chain APY oracle (Chainlink or Aave data provider)
-- [ ] Vercel / production deployment
-- [ ] WalletConnect / mobile wallet support
-- [ ] Arbiscan contract verification
-
----
-
-## Contract Roles
-
-| Role | Holder | Can Do |
-|---|---|---|
-| `DEFAULT_ADMIN_ROLE` | Deployer EOA | pause vault, reject proposals |
-| `GOVERNOR_ROLE` | ShaleGovernor contract | call `vault.updateTargets()` |
-| `PROPOSER_ROLE` | Agent EOA | call `governor.proposeRebalance()` |
-| ShaleShare `owner` | ShaleVault contract | mint/burn share tokens |
+Total: 62/62 passing
+```
 
 ---
 
 ## Tech Stack
 
-- **Contracts:** Solidity 0.8.20, Foundry, OpenZeppelin v5
-- **Agent:** Node.js, TypeScript, ethers v6, node-cron
-- **Frontend:** Next.js 16 (App Router), wagmi v2, viem, Tailwind CSS
-- **Network:** Arbitrum Sepolia (chain 421614)
+| Layer | Technology |
+|---|---|
+| Contracts | Solidity 0.8.20, Foundry, OpenZeppelin v5 |
+| Agent | Node.js 20, TypeScript, ethers v6, Groq SDK, node-cron |
+| LLM | Groq — `llama-3.3-70b-versatile` (falls back to rule-based) |
+| Frontend | Next.js (App Router), wagmi v2, viem, Tailwind CSS |
+| Wallet | Reown AppKit — social login + any EVM wallet |
+| Network | Arbitrum Sepolia (chainId 421614) |
+| Infrastructure | Google Cloud Run (frontend + agent) |
+
+---
+
+## Security Notes
+
+- The AI agent never moves user funds directly. All capital movements go through `StrategyRouter` which is only callable by the vault (for deposits/withdrawals) or KEEPER_ROLE (for rebalance within the vault's deposited capital).
+- `ShaleGovernor` has a 5-minute timelock (demo; production would be 24–48h). APY target proposals can be rejected by the admin before execution.
+- `MIN_DEPOSIT_LOCK = 1 day` prevents same-block deposit-withdraw attacks.
+- `minApexBufferBps = 1500` (15%) ensures a minimum first-loss cushion is always present before senior deposits are accepted.
+- All yield is minted directly (simulation) — no external oracle dependency for testnet.

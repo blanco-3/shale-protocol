@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
       abi: USDC_ABI,
       functionName: "mint",
       args: [address as `0x${string}`, FAUCET_AMOUNT],
+      maxFeePerGas: 100_000_000n,        // 0.1 gwei
+      maxPriorityFeePerGas: 1_000_000n,  // 0.001 gwei
+      gas: 400_000n,
     });
 
     lastDrip.set(addr, now);

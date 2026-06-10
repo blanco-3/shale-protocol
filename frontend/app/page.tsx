@@ -3,10 +3,10 @@ import Link from "next/link";
 import { useReadContracts } from "wagmi";
 import {
   VAULT_ADDRESS, VAULT_ABI,
-  AAVE_POOL_ADDRESS, AAVE_POOL_ABI,
-  FIXED_YIELD_ADDRESS, FIXED_YIELD_STRATEGY_ABI,
+  AAVE_STRATEGY_ADDRESS, SIM_AAVE_ABI,
+  CAMELOT_STRATEGY_ADDRESS, SIM_CAMELOT_ABI,
+  MORPHO_STRATEGY_ADDRESS, SIM_MORPHO_ABI,
   STRATEGY_ROUTER_ADDRESS, STRATEGY_ROUTER_ABI,
-  USDC_ADDRESS,
 } from "../lib/contracts";
 import { formatUsdc, TIERS, bpsToPercent } from "../lib/utils";
 import { TierCard } from "../components/TierCard";
@@ -29,13 +29,15 @@ export default function Dashboard() {
     ],
   });
 
-  // Live strategy data: Aave supply rate + FixedYield configured bps + router weights
+  // Live sim-strategy APY reads + router weights
   const { data: stratData } = useReadContracts({
     contracts: [
-      { address: AAVE_POOL_ADDRESS,       abi: AAVE_POOL_ABI,           functionName: "getReserveData",  args: [USDC_ADDRESS] }, // 0
-      { address: FIXED_YIELD_ADDRESS,     abi: FIXED_YIELD_STRATEGY_ABI, functionName: "annualYieldBps"                       }, // 1
-      { address: STRATEGY_ROUTER_ADDRESS, abi: STRATEGY_ROUTER_ABI,      functionName: "getStrategy",    args: [0n]            }, // 2  Aave weight
-      { address: STRATEGY_ROUTER_ADDRESS, abi: STRATEGY_ROUTER_ABI,      functionName: "getStrategy",    args: [1n]            }, // 3  FixedYield weight
+      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "apyBps" },   // 0
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps" },   // 1
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps" },   // 2
+      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [0n] }, // 3 Aave weight
+      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [1n] }, // 4 Camelot weight
+      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [2n] }, // 5 Morpho weight
     ],
   });
 
@@ -48,41 +50,32 @@ export default function Dashboard() {
   const totalTVL = corePrincipal + seamPrincipal + apexPrincipal;
   const loading = vaultData === undefined;
 
-  // Compute live blended strategy APY in bps from real on-chain reads
-  // Aave currentLiquidityRate is in RAY (1e27 = 100%). Convert: bps = rate / 1e23
-  const RAY = BigInt("1000000000000000000000000000"); // 1e27
-  const aaveReserve = stratData?.[0]?.status === "success"
-    ? (stratData[0].result as { currentLiquidityRate: bigint })
-    : null;
-  const aaveRateBps = aaveReserve
-    ? Number(aaveReserve.currentLiquidityRate * 10000n / RAY)
-    : null;
+  const s = (i: number) => stratData?.[i]?.status === "success" ? Number(stratData[i].result as bigint) : null;
+  const aaveApyBps    = s(0);
+  const camelotApyBps = s(1);
+  const morphoApyBps  = s(2);
 
-  const fixedYieldBps = stratData?.[1]?.status === "success"
-    ? Number(stratData[1].result as bigint)
+  const getWeight = (i: number) => stratData?.[i]?.status === "success"
+    ? Number((stratData[i].result as readonly [string, number, string, boolean, bigint])[1])
     : null;
+  const aaveWeight    = getWeight(3);
+  const camelotWeight = getWeight(4);
+  const morphoWeight  = getWeight(5);
 
-  // getStrategy returns tuple [addr, weight, name, active, deployed] — index 1 = weight
-  const aaveWeight  = stratData?.[2]?.status === "success"
-    ? Number((stratData[2].result as readonly [string, number, string, boolean, bigint])[1])
-    : null;
-  const fixedWeight = stratData?.[3]?.status === "success"
-    ? Number((stratData[3].result as readonly [string, number, string, boolean, bigint])[1])
-    : null;
+  // Blended APY = weighted average of 3 sim strategies (weights sum to 10000)
+  const blendedConservativeBps = (aaveApyBps !== null && camelotApyBps !== null && morphoApyBps !== null
+    && aaveWeight !== null && camelotWeight !== null && morphoWeight !== null)
+    ? Math.round((aaveApyBps * aaveWeight + camelotApyBps * camelotWeight + morphoApyBps * morphoWeight) / 10_000)
+    : 850; // fallback ~8.5%
+  const blendedOptimisticBps = camelotApyBps ?? 1095; // Camelot alone as ceiling
+  const aaveRateBps = aaveApyBps; // kept for display compat
 
-  // Blended strategy APY in bps: weighted average of Aave + FixedYield
-  // Falls back to hardcoded estimates (4.2% / 7%) if data unavailable
-  const blendedConservativeBps = (aaveRateBps !== null && fixedYieldBps !== null && aaveWeight !== null && fixedWeight !== null)
-    ? Math.round((aaveRateBps * aaveWeight + fixedYieldBps * fixedWeight) / 10_000)
-    : 420; // fallback: ~4.2% blended
-  const blendedOptimisticBps = fixedYieldBps ?? 700; // FixedYield alone as optimistic ceiling
-
-  // Realized APY per tier: (totalAccumulatedYield / principal / epochCount) × 52 × 100
-  // Uses epochCount as denominator — gives average per-epoch yield annualised.
+  // Realized APY per tier: (totalAccumulatedYield / principal / epochCount) × epochsPerYear × 100
+  // Epoch = 2 minutes → 365 × 24 × 30 = 262,800 epochs/year
   // Returns null when not enough data (fresh deploy, no epochs yet).
   function realizedAPY(principal: bigint, yieldBucket: bigint): string | null {
     if (principal === 0n || yieldBucket === 0n || epochCount === 0n) return null;
-    const apy = (Number(yieldBucket) / Number(principal) / Number(epochCount)) * 52 * 100;
+    const apy = (Number(yieldBucket) / Number(principal) / Number(epochCount)) * 262800 * 100;
     return apy.toFixed(2) + "%";
   }
 

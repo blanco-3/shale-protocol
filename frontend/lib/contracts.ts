@@ -1,10 +1,12 @@
-export const VAULT_ADDRESS           = process.env.NEXT_PUBLIC_VAULT_ADDRESS            as `0x${string}`;
-export const GOVERNOR_ADDRESS        = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS         as `0x${string}`;
-export const USDC_ADDRESS            = (process.env.NEXT_PUBLIC_USDC_ADDRESS            ?? "0x91BD5E4E9fE9953051A815a6a9A8Fe92E9e7A8d7") as `0x${string}`;
-export const STRATEGY_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS ?? "0x27d0f024c1aE225aFA4366319a9F9F9e63B4610b") as `0x${string}`;
-export const AAVE_STRATEGY_ADDRESS   = (process.env.NEXT_PUBLIC_AAVE_STRATEGY_ADDRESS   ?? "0x29e312Ae6Fe409599D37E6DF3D742869E14BfdBE") as `0x${string}`;
-export const CAMELOT_STRATEGY_ADDRESS = (process.env.NEXT_PUBLIC_FIXED_YIELD_STRATEGY_ADDRESS ?? "0x4BDe068D9DaDDB364Ff7f896AdA0Aa1433b7a8ef") as `0x${string}`;
-export const MORPHO_STRATEGY_ADDRESS  = (process.env.NEXT_PUBLIC_CAMELOT_STRATEGY_ADDRESS    ?? "0x7000eB5469D424b09Cd68AB3D9d634506E51FCEf") as `0x${string}`;
+// Hardcoded fallbacks ensure addresses survive Cloud Build (where .env.production is
+// excluded by .gitignore and never reaches the build step).
+export const VAULT_ADDRESS           = (process.env.NEXT_PUBLIC_VAULT_ADDRESS            ?? "0x3989a0E6450903f60Aa42A82fF1C9c44C24622DC") as `0x${string}`;
+export const GOVERNOR_ADDRESS        = (process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS         ?? "0xc21DAf89edAeBb9B6def2F71b4d5bd71e9AC23F1") as `0x${string}`;
+export const USDC_ADDRESS            = (process.env.NEXT_PUBLIC_USDC_ADDRESS             ?? "0x91BD5E4E9fE9953051A815a6a9A8Fe92E9e7A8d7") as `0x${string}`;
+export const STRATEGY_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS  ?? "0x27d0f024c1aE225aFA4366319a9F9F9e63B4610b") as `0x${string}`;
+export const AAVE_STRATEGY_ADDRESS   = (process.env.NEXT_PUBLIC_AAVE_STRATEGY_ADDRESS    ?? "0x29e312Ae6Fe409599D37E6DF3D742869E14BfdBE") as `0x${string}`;
+export const CAMELOT_STRATEGY_ADDRESS = (process.env.NEXT_PUBLIC_SIM_CAMELOT_ADDRESS     ?? "0x4BDe068D9DaDDB364Ff7f896AdA0Aa1433b7a8ef") as `0x${string}`;
+export const MORPHO_STRATEGY_ADDRESS  = (process.env.NEXT_PUBLIC_SIM_MORPHO_ADDRESS      ?? "0x7000eB5469D424b09Cd68AB3D9d634506E51FCEf") as `0x${string}`;
 export const FIXED_YIELD_ADDRESS      = CAMELOT_STRATEGY_ADDRESS; // legacy alias
 export const AAVE_POOL_ADDRESS        = "0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff" as `0x${string}`;
 

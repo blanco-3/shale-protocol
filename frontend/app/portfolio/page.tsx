@@ -4,7 +4,7 @@ import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionRe
 import { VAULT_ADDRESS, VAULT_ABI, ERC20_ABI } from "../../lib/contracts";
 import { TIERS, formatUsdc } from "../../lib/utils";
 
-const EPOCH_DURATION = 7 * 24 * 3600;
+const EPOCH_DURATION = 120; // 2-min demo epochs
 
 function useEpochCountdown(lastEpochTimestamp: bigint | undefined) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -32,8 +32,8 @@ export default function PortfolioPage() {
   const { writeContract, isPending, data: txHash } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
-  // Static vault reads
-  const { data: staticData } = useReadContracts({
+  // Static vault reads — poll every 15s so epoch countdown triggers Settle button
+  const { data: staticData, refetch: refetchStatic } = useReadContracts({
     contracts: [
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreToken" },
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamToken" },
@@ -43,6 +43,7 @@ export default function PortfolioPage() {
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "withdrawQueueLength" },
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "pendingPenalties" },
     ],
+    query: { refetchInterval: 15_000 },
   });
 
   const coreTokenAddr = staticData?.[0]?.status === "success" ? (staticData[0].result as `0x${string}`) : undefined;
@@ -75,10 +76,15 @@ export default function PortfolioPage() {
       { address: seamTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
       { address: apexTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
     ] : [],
-    query: { enabled: !!address && !!coreTokenAddr },
+    query: { enabled: !!address && !!coreTokenAddr, refetchInterval: 15_000 },
   });
 
-  useEffect(() => { if (isSuccess) refetch(); }, [isSuccess, refetch]);
+  useEffect(() => {
+    if (isSuccess) {
+      refetch();
+      refetchStatic();
+    }
+  }, [isSuccess, refetch, refetchStatic]);
 
   const g = (i: number): bigint | undefined =>
     userData?.[i]?.status === "success" ? (userData[i].result as bigint) : undefined;

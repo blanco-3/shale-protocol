@@ -34,7 +34,7 @@ const STRATEGY_ABI = parseAbi([
   "function strategyCount() view returns (uint256)",
 ]);
 
-const EPOCH_DURATION = 7n * 24n * 3600n;
+const EPOCH_DURATION = 120n; // 2 min demo epochs
 
 export async function GET() {
   const client = createPublicClient({ chain: arbitrumSepolia, transport: http(RPC) });

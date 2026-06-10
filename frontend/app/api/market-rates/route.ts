@@ -27,9 +27,8 @@ const COMPOUND_ABI = parseAbi([
   "function getUtilization() view returns (uint256)",
 ]);
 
-const RPC = process.env.ARBITRUM_SEPOLIA_RPC!.replace("arb-sepolia", "arb-mainnet");
-
 export async function GET() {
+  const RPC = (process.env.ARBITRUM_SEPOLIA_RPC ?? "").replace("arb-sepolia", "arb-mainnet");
   try {
     const client = createPublicClient({
       chain: arbitrum,

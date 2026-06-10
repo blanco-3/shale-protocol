@@ -1,7 +1,12 @@
 "use client";
-import { useState } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
-import { VAULT_ADDRESS, VAULT_ABI, USDC_ADDRESS, ERC20_ABI } from "../../lib/contracts";
+import { useState, useEffect, useRef } from "react";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts, useSimulateContract } from "wagmi";
+import {
+  VAULT_ADDRESS, VAULT_ABI, USDC_ADDRESS, ERC20_ABI,
+  AAVE_STRATEGY_ADDRESS, SIM_AAVE_ABI,
+  CAMELOT_STRATEGY_ADDRESS, SIM_CAMELOT_ABI,
+  MORPHO_STRATEGY_ADDRESS, SIM_MORPHO_ABI,
+} from "../../lib/contracts";
 import { TIERS, TierId, parseUsdc, bpsToPercent } from "../../lib/utils";
 
 const PCT_PRESETS = [25, 50, 75, 100] as const;
@@ -12,8 +17,13 @@ export default function DepositPage() {
   const [amount, setAmount] = useState("");
   const [faucetLoading, setFaucetLoading] = useState(false);
   const [faucetMsg, setFaucetMsg] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<"idle" | "approving" | "depositing" | "approval-confirmed" | "deposit-confirmed" | "error">("idle");
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Holds pending deposit params when auto-chaining approve → deposit
+  const autoDepositRef = useRef<{ amount: bigint; tier: TierId } | null>(null);
 
-  const { writeContract, isPending, data: txHash } = useWriteContract();
+  const { writeContract, isPending, data: txHash, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
   const { data: allowanceData, refetch: refetchAllowance } = useReadContract({
@@ -34,29 +44,121 @@ export default function DepositPage() {
 
   const { data: vaultData } = useReadContracts({
     contracts: [
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "coreTargetMinBps" }, // 0
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "coreTargetMaxBps" }, // 1
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "seamTargetMinBps" }, // 2
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "seamTargetMaxBps" }, // 3
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "corePrincipal" },    // 4
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "seamPrincipal" },    // 5
+      { address: VAULT_ADDRESS,         abi: VAULT_ABI,       functionName: "apexPrincipal" },    // 6
+      { address: AAVE_STRATEGY_ADDRESS, abi: SIM_AAVE_ABI,    functionName: "apyBps" },           // 7
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps" },        // 8
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps" },        // 9
     ],
+    query: { refetchInterval: 30_000 },
   });
 
-  const [coreMin, coreMax, seamMin, seamMax] = vaultData?.map((d) =>
-    d.status === "success" ? (d.result as bigint) : 0n
-  ) ?? Array(4).fill(0n);
+  const g = (i: number) => vaultData?.[i]?.status === "success" ? (vaultData[i].result as bigint) : 0n;
+  const [coreMin, coreMax, seamMin, seamMax, corePrincipal, seamPrincipal, apexPrincipal, aaveApy, camelotApy, morphoApy] =
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(g);
+
+  // Blended strategy APY (weights: Aave 30%, Camelot 50%, Morpho 20%)
+  const blendedBps = (aaveApy * 30n + camelotApy * 50n + morphoApy * 20n) / 100n;
+
+  // Expected APEX APY = (TVL × blendedAPY − CORE_max_need − SEAM_max_need) / apexPrincipal
+  const apexApyBps = (() => {
+    const tvl = corePrincipal + seamPrincipal + apexPrincipal;
+    if (!tvl || !apexPrincipal || !blendedBps) return null;
+    const totalYield = tvl * blendedBps / 10000n;
+    const coreNeed   = corePrincipal * coreMax / 10000n;
+    const seamNeed   = seamPrincipal * seamMax / 10000n;
+    const residual   = totalYield > coreNeed + seamNeed ? totalYield - coreNeed - seamNeed : 0n;
+    return residual * 10000n / apexPrincipal;
+  })();
+
+  const apexApyLabel = apexApyBps !== null && apexApyBps > 0n
+    ? `~${bpsToPercent(apexApyBps)}+ (residual)`
+    : "Residual (variable)";
 
   const apyRange: Record<TierId, string> = {
     0: `${bpsToPercent(coreMin ?? 0n)} – ${bpsToPercent(coreMax ?? 0n)}`,
     1: `${bpsToPercent(seamMin ?? 0n)} – ${bpsToPercent(seamMax ?? 0n)}`,
-    2: "Residual (variable)",
+    2: apexApyLabel,
   };
+
+  // After TX confirmed: distinguish approve vs deposit, auto-chain if needed
+  useEffect(() => {
+    if (!isSuccess) return;
+    if (txHash) setLastTxHash(txHash);
+    const wasApproval = txStatus === "approving";
+
+    if (wasApproval && autoDepositRef.current) {
+      // Auto-chain: approval done, fire deposit TX after a short settle delay
+      const pending = autoDepositRef.current;
+      autoDepositRef.current = null;
+      setTxStatus("depositing");
+      const t = setTimeout(() => {
+        resetWrite();
+        setTimeout(() => {
+          writeContract(
+            {
+              address: VAULT_ADDRESS,
+              abi: VAULT_ABI,
+              functionName: "deposit",
+              args: [pending.amount, pending.tier],
+              maxFeePerGas: 500_000_000n,
+              maxPriorityFeePerGas: 1_000_000n,
+            },
+            {
+              onError: (e) => {
+                autoDepositRef.current = null;
+                const msg = e.message ?? String(e);
+                if (msg.toLowerCase().includes("user rejected") || msg.toLowerCase().includes("denied")) {
+                  setTxStatus("idle");
+                } else {
+                  setErrorMsg(msg.slice(0, 300));
+                  setTxStatus("error");
+                }
+              },
+            }
+          );
+        }, 200);
+      }, 800);
+      return () => clearTimeout(t);
+    } else if (wasApproval) {
+      // Manual approval path (no auto-deposit pending)
+      setTxStatus("approval-confirmed");
+      const r = setTimeout(() => refetchAllowance(), 2000);
+      const c = setTimeout(() => setTxStatus("idle"), 6000);
+      return () => { clearTimeout(r); clearTimeout(c); };
+    } else {
+      // Deposit confirmed
+      setTxStatus("deposit-confirmed");
+      setAmount("");
+      const r = setTimeout(() => { refetchAllowance(); refetchBalance(); }, 2000);
+      const c = setTimeout(() => setTxStatus("idle"), 8000);
+      return () => { clearTimeout(r); clearTimeout(c); };
+    }
+  }, [isSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const usdcBalance = usdcBalanceData as bigint | undefined;
   const parsedAmount = parseUsdc(amount);
   const allowance = allowanceData as bigint | undefined;
-  const needsApproval = allowance !== undefined && allowance < parsedAmount;
+  // If allowance is not yet loaded, default to needing approval when an amount is entered
+  const needsApproval = parsedAmount > 0n && (allowance === undefined || allowance < parsedAmount);
   const insufficientBalance = usdcBalance !== undefined && usdcBalance < parsedAmount;
   const busy = isPending || isConfirming;
+
+  // Pre-simulate deposit to catch revert reason before sending
+  const { error: simError } = useSimulateContract({
+    address: VAULT_ADDRESS,
+    abi: VAULT_ABI,
+    functionName: "deposit",
+    args: parsedAmount > 0n ? [parsedAmount, selectedTier] : undefined,
+    query: {
+      enabled: !!address && parsedAmount > 0n && !needsApproval && !insufficientBalance,
+    },
+  });
 
   function setPercent(pct: number) {
     if (!usdcBalance) return;
@@ -64,22 +166,58 @@ export default function DepositPage() {
     setAmount((Number(value) / 1e6).toFixed(2));
   }
 
-  function handleApprove() {
+  function handleApproveAndDeposit() {
+    // Store the intent so the isSuccess effect can auto-fire the deposit after approval
+    autoDepositRef.current = { amount: parsedAmount, tier: selectedTier };
+    setTxStatus("approving");
+    setErrorMsg(null);
     writeContract(
       {
         address: USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: "approve",
         args: [VAULT_ADDRESS, parsedAmount],
+        maxFeePerGas: 500_000_000n,
+        maxPriorityFeePerGas: 1_000_000n,
       },
-      { onSuccess: () => refetchAllowance() }
+      {
+        onError: (e) => {
+          autoDepositRef.current = null;
+          const msg = e.message ?? String(e);
+          if (msg.toLowerCase().includes("user rejected") || msg.toLowerCase().includes("denied")) {
+            setTxStatus("idle");
+          } else {
+            setErrorMsg(msg.slice(0, 300));
+            setTxStatus("error");
+          }
+        },
+      }
     );
   }
 
   function handleDeposit() {
+    setTxStatus("depositing");
+    setErrorMsg(null);
     writeContract(
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "deposit", args: [parsedAmount, selectedTier] },
-      { onSuccess: () => { refetchAllowance(); refetchBalance(); setAmount(""); } }
+      {
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "deposit",
+        args: [parsedAmount, selectedTier],
+        maxFeePerGas: 500_000_000n,
+        maxPriorityFeePerGas: 1_000_000n,
+      },
+      {
+        onError: (e) => {
+          const msg = e.message ?? String(e);
+          if (msg.toLowerCase().includes("user rejected") || msg.toLowerCase().includes("denied")) {
+            setTxStatus("idle");
+          } else {
+            setErrorMsg(msg.slice(0, 300));
+            setTxStatus("error");
+          }
+        },
+      }
     );
   }
 
@@ -96,7 +234,7 @@ export default function DepositPage() {
       const data = await res.json();
       if (res.ok) {
         setFaucetMsg("1,000 USDC sent! Tx: " + data.txHash.slice(0, 10) + "...");
-        refetchBalance();
+        setTimeout(() => refetchBalance(), 5000); // refetch after ~5s
       } else {
         setFaucetMsg(data.error ?? "Faucet error");
       }
@@ -107,9 +245,54 @@ export default function DepositPage() {
     }
   }
 
+  const statusBg: Record<string, string> = {
+    "approval-confirmed": "bg-green-50 border-green-200 text-green-800",
+    "deposit-confirmed":  "bg-green-50 border-green-200 text-green-800",
+    error:      "bg-red-50 border-red-200 text-red-700",
+    approving:  "bg-blue-50 border-blue-200 text-blue-700",
+    depositing: "bg-blue-50 border-blue-200 text-blue-700",
+  };
+
   return (
     <div className="max-w-md">
       <h1 className="text-2xl font-bold mb-6">Deposit</h1>
+
+      {/* TX status banner */}
+      {txStatus !== "idle" && (
+        <div className={`border p-3 mb-4 text-sm ${statusBg[txStatus] ?? ""}`}>
+          {txStatus === "approval-confirmed" && (
+            <div className="flex items-center justify-between">
+              <span className="font-bold">Approval confirmed. Now click Deposit →</span>
+              {lastTxHash && (
+                <a href={`https://sepolia.arbiscan.io/tx/${lastTxHash}`} target="_blank" rel="noopener noreferrer" className="text-xs underline ml-2">
+                  View →
+                </a>
+              )}
+            </div>
+          )}
+          {txStatus === "deposit-confirmed" && (
+            <div className="flex items-center justify-between">
+              <span className="font-bold">Deposit confirmed.</span>
+              {lastTxHash && (
+                <a href={`https://sepolia.arbiscan.io/tx/${lastTxHash}`} target="_blank" rel="noopener noreferrer" className="text-xs underline ml-2">
+                  View on Arbiscan →
+                </a>
+              )}
+            </div>
+          )}
+          {txStatus === "approving" && (busy ? "Step 1/2 — Waiting for approval… deposit will follow automatically." : "Approval submitted.")}
+          {txStatus === "depositing" && (busy ? "Step 2/2 — Waiting for deposit confirmation…" : "Deposit submitted.")}
+          {txStatus === "error" && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold">Transaction failed.</span>
+                <button onClick={() => { setTxStatus("idle"); setErrorMsg(null); resetWrite(); }} className="text-xs underline ml-2">Dismiss</button>
+              </div>
+              {errorMsg && <p className="text-xs font-mono break-all opacity-80">{errorMsg}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tier selector */}
       <div className="grid grid-cols-3 gap-2 mb-4">
@@ -176,12 +359,17 @@ export default function DepositPage() {
       </div>
 
       {faucetMsg && (
-        <p className={`text-xs mb-3 ${faucetMsg.startsWith("10,000") ? "text-green-600" : "text-red-500"}`}>
+        <p className={`text-xs mb-3 ${faucetMsg.includes("sent") ? "text-green-600" : "text-red-500"}`}>
           {faucetMsg}
         </p>
       )}
 
-      {isSuccess && <p className="text-sm text-green-600 mb-4">Deposit confirmed.</p>}
+      {/* Simulation error — shows contract revert reason before TX */}
+      {simError && parsedAmount > 0n && !needsApproval && (
+        <div className="border border-red-200 bg-red-50 p-2 mb-3 text-xs text-red-700 font-mono break-all">
+          Simulation: {simError.message?.slice(0, 200) ?? String(simError)}
+        </div>
+      )}
 
       {/* Action button */}
       {!isConnected ? (
@@ -190,11 +378,11 @@ export default function DepositPage() {
         <p className="text-sm text-red-500 mb-4">Insufficient USDC balance.</p>
       ) : needsApproval ? (
         <button
-          onClick={handleApprove}
+          onClick={handleApproveAndDeposit}
           disabled={busy || !parsedAmount}
           className="w-full border border-black py-2 hover:bg-black hover:text-white transition-colors disabled:opacity-50 mb-4"
         >
-          {busy ? "Approving..." : "Approve USDC"}
+          {txStatus === "approving" && busy ? "Approving… (1/2)" : txStatus === "depositing" && busy ? "Depositing… (2/2)" : `Approve & Deposit to ${TIERS[selectedTier].name} →`}
         </button>
       ) : (
         <button
@@ -202,7 +390,7 @@ export default function DepositPage() {
           disabled={busy || !parsedAmount}
           className="w-full border border-black py-2 hover:bg-black hover:text-white transition-colors disabled:opacity-50 mb-4"
         >
-          {busy ? "Depositing..." : `Deposit to ${TIERS[selectedTier].name} →`}
+          {busy ? "Depositing…" : `Deposit to ${TIERS[selectedTier].name} →`}
         </button>
       )}
 
@@ -210,7 +398,7 @@ export default function DepositPage() {
       <div className="border border-gray-100 bg-gray-50 p-4 text-xs text-gray-500 space-y-1">
         <p className="font-bold text-gray-700 mb-2">Important Information</p>
         <p>• Deposits are deployed to the yield strategy immediately.</p>
-        <p>• Yield is distributed at the end of each 7-day epoch via waterfall.</p>
+        <p>• Yield is distributed at the end of each 2-minute epoch via waterfall.</p>
         <p>• Target APY is indicative and adjusted by the AI agent based on market conditions.</p>
         <p>• APEX depositors bear first loss if yield falls short of CORE/SEAM targets.</p>
         <p>• Use <span className="font-medium">Queue</span> withdrawal (no penalty) or <span className="font-medium">Early</span> withdrawal (1% penalty) in Portfolio.</p>
