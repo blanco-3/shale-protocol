@@ -70,6 +70,8 @@ export function AgentPanel() {
               abi: GOVERNOR_ABI,
               functionName: "executeProposal",
               args: [proposal.id],
+              maxFeePerGas: 500_000_000n,
+              maxPriorityFeePerGas: 1_000_000n,
             })
           }
           disabled={busy}

@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
 
-// ── Pool setup (fixed for simulation) ────────────────────────────────────────
-const TOTAL_TVL  = 10_000;
-const CORE_TVL   = 4_250;   // 42.5%
-const SEAM_TVL   = 4_250;   // 42.5%
-const APEX_TVL   = 1_500;   // 15.0%
+// ── Pool setup (matches live vault — Arbitrum Sepolia demo) ──────────────────
+const TOTAL_TVL  = 750_000;
+const CORE_TVL   = 375_000;  // 50%
+const SEAM_TVL   = 200_000;  // 26.7%
+const APEX_TVL   = 175_000;  // 23.3%
 const CORE_TARGET_PCT = 2.5;  // guaranteed min APY
 const SEAM_TARGET_PCT = 5.0;  // guaranteed min APY
 

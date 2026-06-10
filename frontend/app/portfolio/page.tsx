@@ -114,16 +114,18 @@ export default function PortfolioPage() {
 
   const busy = isPending || isConfirming;
 
+  const GAS = { maxFeePerGas: 500_000_000n, maxPriorityFeePerGas: 1_000_000n } as const;
+
   function handleRequestWithdraw(tierId: number, shares: bigint) {
-    writeContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "requestWithdraw", args: [shares, tierId] });
+    writeContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "requestWithdraw", args: [shares, tierId], ...GAS });
   }
 
   function handleEarlyWithdraw(tierId: number, shares: bigint) {
-    writeContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "earlyWithdraw", args: [shares, tierId] });
+    writeContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "earlyWithdraw", args: [shares, tierId], ...GAS });
   }
 
   function handleSettleEpoch() {
-    writeContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "settleEpoch" });
+    writeContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "settleEpoch", ...GAS });
   }
 
   return (
