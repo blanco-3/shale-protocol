@@ -1,3 +1,4 @@
+import http from "http";
 import cron from "node-cron";
 import { ethers } from "ethers";
 import { fetchAaveAPYBps } from "./aave";
@@ -6,6 +7,13 @@ import { assessMarket, submitProposal } from "./proposer";
 import { maybeSettleEpoch } from "./settler";
 import { maybeRebalance } from "./rebalancer";
 import { CRON_SCHEDULE, ADDRESSES, provider } from "./config";
+
+// ── Health check server (required by Cloud Run) ──────────────────────────────
+const PORT = process.env.PORT ?? "8080";
+http.createServer((_, res) => {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ status: "ok", agent: "shale", running: isRunning }));
+}).listen(PORT, () => console.log(`[agent] Health server on :${PORT}`));
 
 let isRunning = false;
 
