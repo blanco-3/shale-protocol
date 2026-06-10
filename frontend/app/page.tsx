@@ -23,9 +23,6 @@ export default function Dashboard() {
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },        // 5
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },        // 6
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "epochCount" },              // 7
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreAccumulatedYield" },    // 8
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamAccumulatedYield" },    // 9
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexAccumulatedYield" },    // 10
     ],
   });
 
@@ -45,7 +42,6 @@ export default function Dashboard() {
   const corePrincipal = r(0), seamPrincipal = r(1), apexPrincipal = r(2);
   const coreMin = r(3), coreMax = r(4), seamMin = r(5), seamMax = r(6);
   const epochCount = r(7);
-  const coreYield = r(8), seamYield = r(9), apexYield = r(10);
 
   const totalTVL = corePrincipal + seamPrincipal + apexPrincipal;
   const loading = vaultData === undefined;
@@ -70,18 +66,14 @@ export default function Dashboard() {
   const blendedOptimisticBps = camelotApyBps ?? 1095; // Camelot alone as ceiling
   const aaveRateBps = aaveApyBps; // kept for display compat
 
-  // Realized APY per tier: (totalAccumulatedYield / principal / epochCount) × epochsPerYear × 100
-  // Epoch = 2 minutes → 365 × 24 × 30 = 262,800 epochs/year
-  // Returns null when not enough data (fresh deploy, no epochs yet).
-  function realizedAPY(principal: bigint, yieldBucket: bigint): string | null {
-    if (principal === 0n || yieldBucket === 0n || epochCount === 0n) return null;
-    const apy = (Number(yieldBucket) / Number(principal) / Number(epochCount)) * 262800 * 100;
-    return apy.toFixed(2) + "%";
-  }
-
-  const coreRealized  = realizedAPY(corePrincipal, coreYield);
-  const seamRealized  = realizedAPY(seamPrincipal, seamYield);
-  const apexRealized  = realizedAPY(apexPrincipal, apexYield);
+  // Realized APY is intentionally not computed here.
+  // The strategies accrue yield based on actual wall-clock time, not epoch count,
+  // so a simple (yieldBucket / principal / epochCount) × epochsPerYear formula
+  // produces inflated numbers when epochs are settled after large time gaps (e.g.
+  // initial vault setup). Projected APY from live strategy rates is shown instead.
+  const coreRealized  = null;
+  const seamRealized  = null;
+  const apexRealized  = null;
 
   // APEX projected APY range
   // Formula: (strategyYield × total - coreDue_annual - seamDue_annual) / apexPrincipal
