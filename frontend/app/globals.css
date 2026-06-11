@@ -251,3 +251,19 @@ a:hover { text-decoration: underline; }
     radial-gradient(circle at 20% 30%, rgba(160,104,40,0.04) 0, transparent 38%),
     radial-gradient(circle at 80% 70%, rgba(92,51,24,0.035) 0, transparent 42%);
 }
+
+/* ── Shale animations ─────────────────────────────────────────────────────── */
+
+/* Strata band entrance: fade up from below */
+@keyframes shaleRise {
+  from { opacity: 0; transform: skewY(7deg) translateY(14px); }
+  to   { opacity: 1; transform: skewY(7deg) translateY(0); }
+}
+
+/* USDC token drilling down through the core sample column */
+@keyframes shaleDrill {
+  0%   { top: 8%; }
+  45%  { top: 72%; }
+  55%  { top: 72%; }
+  100% { top: 8%; }
+}

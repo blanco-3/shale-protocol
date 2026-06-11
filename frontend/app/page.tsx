@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useReadContracts } from "wagmi";
 import {
   VAULT_ADDRESS, VAULT_ABI,
@@ -13,7 +12,7 @@ import { TierCard } from "../components/TierCard";
 import { AgentPanel } from "../components/AgentPanel";
 import { Card } from "../components/ui/Card";
 import { StatTile } from "../components/ui/StatTile";
-import { Button } from "../components/ui/Button";
+import { Hero } from "../components/shale/Hero";
 
 const eyebrow: React.CSSProperties = {
   font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)",
@@ -94,29 +93,7 @@ export default function Dashboard() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px", paddingBottom: "48px" }}>
       {/* Hero */}
-      <div className="shale-strata" style={{
-        borderRadius: "var(--r-lg)", padding: "40px 44px", marginBottom: "4px",
-        border: "1px solid var(--border-soft)",
-      }}>
-        <div style={{ maxWidth: "560px" }}>
-          <h1 style={{ font: "var(--fw-bold) 38px/1.1 var(--font-serif)", color: "var(--sand-50)", letterSpacing: "-0.02em", margin: "0 0 14px" }}>
-            AI-Managed Yield Vault
-          </h1>
-          <p style={{ font: "400 15px/1.6 var(--font-sans)", color: "rgba(249,244,234,0.72)", margin: "0 0 22px" }}>
-            SHALE splits your deposit across three risk tiers — CORE, SEAM, and APEX — each earning
-            different rates based on loss-absorption priority. An on-chain AI agent continuously
-            rebalances across DeFi strategies and adjusts APY targets via governance proposals.
-          </p>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <Link href="/deposit" style={{ textDecoration: "none" }}>
-              <Button tone="accent" size="md">Start Earning →</Button>
-            </Link>
-            <Link href="/analytics" style={{ textDecoration: "none" }}>
-              <Button variant="outline" tone="accent" size="md">View Analytics</Button>
-            </Link>
-          </div>
-        </div>
-      </div>
+      <Hero />
 
       {/* Stats bar */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
