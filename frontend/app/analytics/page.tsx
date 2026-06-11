@@ -10,8 +10,12 @@ import {
   MORPHO_STRATEGY_ADDRESS, SIM_MORPHO_ABI,
 } from "../../lib/contracts";
 import { formatUsdc, bpsToPercent } from "../../lib/utils";
+import { Card } from "../../components/ui/Card";
+import { Badge } from "../../components/ui/Badge";
+import { StatTile } from "../../components/ui/StatTile";
+import { StrataBar } from "../../components/ui/StrataBar";
 
-// ── Mainnet market rates hook ─────────────────────────────────────────────────
+// ── Market rates hook ─────────────────────────────────────────────────────────
 
 type MarketRates = {
   aave:     { apyBps: number; apyPct: string; protocol: string };
@@ -24,236 +28,93 @@ type MarketRates = {
 function useMarketRates() {
   const [rates, setRates] = useState<MarketRates | null>(null);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    fetch("/api/market-rates")
-      .then((r) => r.json())
-      .then((d) => { if (!d.error) setRates(d); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    fetch("/api/market-rates").then((r) => r.json()).then((d) => { if (!d.error) setRates(d); }).catch(() => {}).finally(() => setLoading(false));
   }, []);
-
   return { rates, loading };
 }
 
 // ── Strategy metadata ─────────────────────────────────────────────────────────
 
-type StrategyMeta = { protocol: string; asset: string; color: string; description: string; model: string };
+type StrategyMeta = { protocol: string; asset: string; accentColor: string; description: string; model: string };
 
 const STRATEGY_META: StrategyMeta[] = [
-  {
-    protocol: "Aave V3",
-    asset: "USDC/USDT",
-    color: "bg-purple-600",
-    description: "Variable-rate USDC supply. APY derived from pool utilization via two-slope interest rate model.",
-    model: "aave",
-  },
-  {
-    protocol: "Camelot V3 LP",
-    asset: "USDC/USDT",
-    color: "bg-orange-500",
-    description: "Concentrated liquidity LP fees. APY = daily trading volume / TVL × fee tier × 365.",
-    model: "camelot",
-  },
-  {
-    protocol: "Morpho Blue",
-    asset: "USDC",
-    color: "bg-blue-600",
-    description: "P2P lending market. Matched suppliers earn above Aave supply rate, blended with unmatched idle.",
-    model: "morpho",
-  },
+  { protocol: "Aave V3",      asset: "USDC/USDT", accentColor: "var(--seam-600)",  description: "Variable-rate USDC supply. APY derived from pool utilization via two-slope interest rate model.", model: "aave" },
+  { protocol: "Camelot V3 LP",asset: "USDC/USDT", accentColor: "var(--apex-500)",  description: "Concentrated liquidity LP fees. APY = daily trading volume / TVL × fee tier × 365.", model: "camelot" },
+  { protocol: "Morpho Blue",  asset: "USDC",       accentColor: "var(--accent-500)",description: "P2P lending market. Matched suppliers earn above Aave supply rate, blended with unmatched idle.", model: "morpho" },
 ];
 
 function getMeta(name: string): StrategyMeta {
   if (name.toLowerCase().includes("aave"))    return STRATEGY_META[0];
   if (name.toLowerCase().includes("camelot")) return STRATEGY_META[1];
   if (name.toLowerCase().includes("morpho"))  return STRATEGY_META[2];
-  return { protocol: name, asset: "USDC", color: "bg-gray-500", description: "", model: "" };
+  return { protocol: name, asset: "USDC", accentColor: "var(--text-muted)", description: "", model: "" };
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type RebalanceEvent = {
-  timestamp: bigint;
-  initiator: `0x${string}`;
-  totalAssets: bigint;
-  blockNumber: bigint;
-};
+type RebalanceEvent = { timestamp: bigint; initiator: `0x${string}`; totalAssets: bigint; blockNumber: bigint };
+type EpochEvent = { epochId: bigint; totalYield: bigint; coreShare: bigint; seamShare: bigint; apexShare: bigint; blockNumber: bigint };
+type AaveState    = { utilization: bigint; supplyApy: bigint; principal: bigint; pending: bigint };
+type CamelotState = { volumeRatio: bigint; feeTier: bigint; dailyFeeRate: bigint; lpApy: bigint; principal: bigint; pending: bigint };
+type MorphoState  = { supplyApy: bigint; borrowApy: bigint; matchingRatio: bigint; p2pRate: bigint; blendedApy: bigint; principal: bigint; pending: bigint };
+type StrategyInfo = { addr: string; weight: number; name: string; active: boolean; deployed: bigint };
 
-type EpochEvent = {
-  epochId: bigint;
-  totalYield: bigint;
-  coreShare: bigint;
-  seamShare: bigint;
-  apexShare: bigint;
-  blockNumber: bigint;
-};
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 
-// ── Rebalancing history hook ──────────────────────────────────────────────────
-
-const REBALANCED_ABI = parseAbiItem(
-  "event Rebalanced(uint256 timestamp, address indexed initiator, uint256 totalAssets)"
-);
+const REBALANCED_ABI = parseAbiItem("event Rebalanced(uint256 timestamp, address indexed initiator, uint256 totalAssets)");
+const EPOCH_SETTLED_ABI = parseAbiItem("event EpochSettled(uint256 indexed epochId, uint256 totalYield, uint256 coreShare, uint256 seamShare, uint256 apexShare)");
 
 function useRebalanceHistory() {
   const [events, setEvents] = useState<RebalanceEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const publicClient = usePublicClient();
-
   useEffect(() => {
     if (!publicClient || !STRATEGY_ROUTER_ADDRESS) return;
     setLoading(true);
-    publicClient
-      .getLogs({ address: STRATEGY_ROUTER_ADDRESS, event: REBALANCED_ABI, fromBlock: 0n, toBlock: "latest" })
-      .then((logs) => {
-        setEvents(
-          logs
-            .map((l) => ({
-              timestamp:   l.args.timestamp   ?? 0n,
-              initiator:   (l.args.initiator  ?? "0x0") as `0x${string}`,
-              totalAssets: l.args.totalAssets ?? 0n,
-              blockNumber: l.blockNumber       ?? 0n,
-            }))
-            .sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber))
-        );
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    publicClient.getLogs({ address: STRATEGY_ROUTER_ADDRESS, event: REBALANCED_ABI, fromBlock: 0n, toBlock: "latest" })
+      .then((logs) => setEvents(logs.map((l) => ({ timestamp: l.args.timestamp ?? 0n, initiator: (l.args.initiator ?? "0x0") as `0x${string}`, totalAssets: l.args.totalAssets ?? 0n, blockNumber: l.blockNumber ?? 0n })).sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber))))
+      .catch(() => {}).finally(() => setLoading(false));
   }, [publicClient]);
-
   return { events, loading };
 }
-
-// ── Sim strategy APY + market state hooks ─────────────────────────────────────
-
-type AaveState    = { utilization: bigint; supplyApy: bigint; principal: bigint; pending: bigint };
-type CamelotState = { volumeRatio: bigint; feeTier: bigint; dailyFeeRate: bigint; lpApy: bigint; principal: bigint; pending: bigint };
-type MorphoState  = { supplyApy: bigint; borrowApy: bigint; matchingRatio: bigint; p2pRate: bigint; blendedApy: bigint; principal: bigint; pending: bigint };
-
-function useSimStrategies() {
-  const { data } = useReadContracts({
-    contracts: [
-      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "apyBps"      },
-      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps"      },
-      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps"      },
-      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "marketState" },
-      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "marketState" },
-      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "marketState" },
-    ],
-  });
-
-  const apyByAddr: Record<string, number> = {};
-  if (data?.[0]?.status === "success") apyByAddr[AAVE_STRATEGY_ADDRESS.toLowerCase()]    = Number(data[0].result as bigint);
-  if (data?.[1]?.status === "success") apyByAddr[CAMELOT_STRATEGY_ADDRESS.toLowerCase()] = Number(data[1].result as bigint);
-  if (data?.[2]?.status === "success") apyByAddr[MORPHO_STRATEGY_ADDRESS.toLowerCase()]  = Number(data[2].result as bigint);
-
-  const aaveState    = data?.[3]?.status === "success" ? (data[3].result as unknown as AaveState)    : null;
-  const camelotState = data?.[4]?.status === "success" ? (data[4].result as unknown as CamelotState) : null;
-  const morphoState  = data?.[5]?.status === "success" ? (data[5].result as unknown as MorphoState)  : null;
-
-  return { apyByAddr, aaveState, camelotState, morphoState };
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatTs(ts: bigint): string {
-  if (ts === 0n) return "—";
-  const d = new Date(Number(ts) * 1000);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    + "  " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-}
-
-function shortAddr(addr: string): string {
-  return addr.slice(0, 6) + "…" + addr.slice(-4);
-}
-
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function StatBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="border border-gray-200 p-4">
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
-      <p className="text-2xl font-bold font-mono">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-function TierBar({ label, value, total, color }: { label: string; value: bigint; total: bigint; color: string }) {
-  const pct = total > 0n ? Number((value * 10000n) / total) / 100 : 0;
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-gray-500">{label}</span>
-        <span className="font-mono">{formatUsdc(value)} <span className="text-gray-400">({pct.toFixed(1)}%)</span></span>
-      </div>
-      <div className="h-2 bg-gray-100 w-full">
-        <div className={`h-2 ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
-// ── Epoch history hook ────────────────────────────────────────────────────────
-// Fetches all EpochSettled events from the vault contract using viem getLogs.
-// fromBlock 0n works fine for a fresh testnet deployment.
-
-const EPOCH_SETTLED_ABI = parseAbiItem(
-  "event EpochSettled(uint256 indexed epochId, uint256 totalYield, uint256 coreShare, uint256 seamShare, uint256 apexShare)"
-);
 
 function useEpochHistory() {
   const [epochs, setEpochs] = useState<EpochEvent[]>([]);
   const [histLoading, setHistLoading] = useState(true);
   const [histError, setHistError] = useState<string | null>(null);
   const publicClient = usePublicClient();
-
   useEffect(() => {
     if (!publicClient || !VAULT_ADDRESS) return;
-    setHistLoading(true);
-    setHistError(null);
-
-    publicClient
-      .getLogs({
-        address: VAULT_ADDRESS,
-        event: EPOCH_SETTLED_ABI,
-        fromBlock: 0n,
-        toBlock: "latest",
-      })
-      .then((logs) => {
-        const parsed: EpochEvent[] = logs
-          .filter((l) => l.args.epochId !== undefined)
-          .map((l) => ({
-            epochId:    l.args.epochId!,
-            totalYield: l.args.totalYield ?? 0n,
-            coreShare:  l.args.coreShare  ?? 0n,
-            seamShare:  l.args.seamShare  ?? 0n,
-            apexShare:  l.args.apexShare  ?? 0n,
-            blockNumber: l.blockNumber ?? 0n,
-          }))
-          .sort((a, b) => Number(a.epochId) - Number(b.epochId));
-        setEpochs(parsed);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch epoch history:", err);
-        setHistError("History unavailable — RPC block-range limit exceeded.");
-      })
+    setHistLoading(true); setHistError(null);
+    publicClient.getLogs({ address: VAULT_ADDRESS, event: EPOCH_SETTLED_ABI, fromBlock: 0n, toBlock: "latest" })
+      .then((logs) => setEpochs(logs.filter((l) => l.args.epochId !== undefined).map((l) => ({ epochId: l.args.epochId!, totalYield: l.args.totalYield ?? 0n, coreShare: l.args.coreShare ?? 0n, seamShare: l.args.seamShare ?? 0n, apexShare: l.args.apexShare ?? 0n, blockNumber: l.blockNumber ?? 0n })).sort((a, b) => Number(a.epochId) - Number(b.epochId))))
+      .catch((err) => { console.error(err); setHistError("History unavailable — RPC block-range limit exceeded."); })
       .finally(() => setHistLoading(false));
   }, [publicClient]);
-
   return { epochs, histLoading, histError };
 }
 
-// ── Strategy allocation hook ─────────────────────────────────────────────────
-// Reads each sub-strategy slot from StrategyRouter on-chain.
-
-type StrategyInfo = {
-  addr: string;
-  weight: number;
-  name: string;
-  active: boolean;
-  deployed: bigint;
-};
+function useSimStrategies() {
+  const { data } = useReadContracts({
+    contracts: [
+      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "apyBps" },
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps" },
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps" },
+      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "marketState" },
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "marketState" },
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "marketState" },
+    ],
+  });
+  const apyByAddr: Record<string, number> = {};
+  if (data?.[0]?.status === "success") apyByAddr[AAVE_STRATEGY_ADDRESS.toLowerCase()]    = Number(data[0].result as bigint);
+  if (data?.[1]?.status === "success") apyByAddr[CAMELOT_STRATEGY_ADDRESS.toLowerCase()] = Number(data[1].result as bigint);
+  if (data?.[2]?.status === "success") apyByAddr[MORPHO_STRATEGY_ADDRESS.toLowerCase()]  = Number(data[2].result as bigint);
+  const aaveState    = data?.[3]?.status === "success" ? (data[3].result as unknown as AaveState) : null;
+  const camelotState = data?.[4]?.status === "success" ? (data[4].result as unknown as CamelotState) : null;
+  const morphoState  = data?.[5]?.status === "success" ? (data[5].result as unknown as MorphoState)  : null;
+  return { apyByAddr, aaveState, camelotState, morphoState };
+}
 
 function useStrategyAllocations() {
   const { data: countData } = useReadContracts({
@@ -262,56 +123,58 @@ function useStrategyAllocations() {
       { address: STRATEGY_ROUTER_ADDRESS, abi: STRATEGY_ROUTER_ABI, functionName: "totalAssets"   },
     ],
   });
-
   const count = countData?.[0]?.status === "success" ? Number(countData[0].result as bigint) : 0;
   const routerTotal = countData?.[1]?.status === "success" ? (countData[1].result as bigint) : 0n;
-
-  // Build per-index reads
-  const slotContracts = Array.from({ length: count }, (_, i) => ({
-    address: STRATEGY_ROUTER_ADDRESS,
-    abi: STRATEGY_ROUTER_ABI,
-    functionName: "getStrategy" as const,
-    args: [BigInt(i)],
-  }));
-
-  const { data: slotData } = useReadContracts({
-    contracts: slotContracts,
-    query: { enabled: count > 0 },
-  });
-
-  const strategies: StrategyInfo[] = (slotData ?? [])
-    .filter((d) => d.status === "success")
-    .map((d) => {
-      const [addr, weight, name, active, deployed] = d.result as [string, number, string, boolean, bigint];
-      return { addr, weight, name, active, deployed };
-    });
-
+  const slotContracts = Array.from({ length: count }, (_, i) => ({ address: STRATEGY_ROUTER_ADDRESS, abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy" as const, args: [BigInt(i)] }));
+  const { data: slotData } = useReadContracts({ contracts: slotContracts, query: { enabled: count > 0 } });
+  const strategies: StrategyInfo[] = (slotData ?? []).filter((d) => d.status === "success").map((d) => { const [addr, weight, name, active, deployed] = d.result as [string, number, string, boolean, bigint]; return { addr, weight, name, active, deployed }; });
   return { strategies, routerTotal };
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatTs(ts: bigint): string {
+  if (ts === 0n) return "—";
+  const d = new Date(Number(ts) * 1000);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + "  " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
+function shortAddr(addr: string): string { return addr.slice(0, 6) + "…" + addr.slice(-4); }
+
+const eyebrow: React.CSSProperties = {
+  font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)",
+  letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)",
+};
+
+const thStyle: React.CSSProperties = {
+  textAlign: "left", padding: "10px 22px",
+  font: "var(--fw-semibold) 10px/1 var(--font-sans)",
+  letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-faint)",
+  borderBottom: "1px solid var(--border-soft)",
+};
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
   const { data } = useReadContracts({
     contracts: [
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreAccumulatedYield" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamAccumulatedYield" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexAccumulatedYield" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "epochCount" },
-      { address: VAULT_ADDRESS,           abi: VAULT_ABI,           functionName: "pendingPenalties" }, // 11
-      { address: STRATEGY_ROUTER_ADDRESS, abi: STRATEGY_ROUTER_ABI, functionName: "totalAssets"      }, // 12
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },           // 0
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },           // 1
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },           // 2
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreAccumulatedYield" },    // 3
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamAccumulatedYield" },    // 4
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexAccumulatedYield" },    // 5
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },        // 6
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },        // 7
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },        // 8
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },        // 9
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "epochCount" },              // 10
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "pendingPenalties" },        // 11
+      { address: STRATEGY_ROUTER_ADDRESS, abi: STRATEGY_ROUTER_ABI, functionName: "totalAssets" }, // 12
     ],
   });
 
   const r = (i: number) => data?.[i]?.status === "success" ? (data[i].result as bigint) : 0n;
-
   const corePrincipal = r(0), seamPrincipal = r(1), apexPrincipal = r(2);
   const coreYield = r(3), seamYield = r(4), apexYield = r(5);
   const coreMin = r(6), coreMax = r(7), seamMin = r(8), seamMax = r(9);
@@ -322,18 +185,10 @@ export default function AnalyticsPage() {
   const totalPrincipal = corePrincipal + seamPrincipal + apexPrincipal;
   const totalYield = coreYield + seamYield + apexYield;
   const totalTVL = totalPrincipal + totalYield;
-
-  // APEX buffer ratio — key risk metric
-  const apexRatioPct = totalPrincipal > 0n
-    ? Number((apexPrincipal * 10000n) / totalPrincipal) / 100
-    : 0;
-
-  // APEX leverage: APEX yield / APEX principal vs CORE yield / CORE principal
-  // Shows how much more (or less) APEX earns per unit relative to CORE.
+  const apexRatioPct = totalPrincipal > 0n ? Number((apexPrincipal * 10000n) / totalPrincipal) / 100 : 0;
   const apexLeverage = (corePrincipal > 0n && apexPrincipal > 0n && coreYield > 0n)
     ? ((Number(apexYield) / Number(apexPrincipal)) / (Number(coreYield) / Number(corePrincipal))).toFixed(2)
     : "—";
-
   const loading = data === undefined;
 
   const { epochs, histLoading, histError } = useEpochHistory();
@@ -342,570 +197,415 @@ export default function AnalyticsPage() {
   const { rates: marketRates, loading: ratesLoading } = useMarketRates();
   const { events: rebalanceEvents, loading: rebalanceLoading } = useRebalanceHistory();
 
-  // Blended strategy APY weighted by current allocation
   const blendedBps = routerStrategies.length > 0 && Object.keys(apyByAddr).length > 0
-    ? Math.round(
-        routerStrategies.reduce((sum, s) => {
-          const apyB = apyByAddr[s.addr.toLowerCase()] ?? null;
-          return sum + (apyB !== null ? apyB * s.weight : 0);
-        }, 0) / 10_000
-      )
+    ? Math.round(routerStrategies.reduce((sum, s) => { const apyB = apyByAddr[s.addr.toLowerCase()] ?? null; return sum + (apyB !== null ? apyB * s.weight : 0); }, 0) / 10_000)
     : null;
 
-  // Effective APY per epoch — uses current principal as denominator (approximation since
-  // we don't store historical snapshots on-chain). Annualised from 7-day epoch.
   function epochAPY(epochYield: bigint): string {
     if (totalPrincipal === 0n) return "—";
-    const apy = (Number(epochYield) / Number(totalPrincipal)) * (365 / 7) * 100;
-    return apy.toFixed(2) + "%";
+    return ((Number(epochYield) / Number(totalPrincipal)) * (365 / 7) * 100).toFixed(2) + "%";
   }
 
-  // Running total yield across all settled epochs (from events)
   const historicTotalYield = epochs.reduce((sum, e) => sum + e.totalYield, 0n);
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold mb-2">Analytics</h1>
-      <p className="text-sm text-gray-400 mb-6">Real-time protocol metrics</p>
+  const tierPct = (v: bigint) => totalPrincipal > 0n ? Number((v * 10000n) / totalPrincipal) / 100 : 0;
 
-      {/* Production Yield Reference ─────────────────────────────────────────── */}
-      <div className="border border-gray-200 mb-6">
-        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+  const bufferTone = apexRatioPct >= 20 ? "positive" : apexRatioPct >= 10 ? "warning" : "danger";
+  const bufferLabel = apexRatioPct >= 20 ? "HEALTHY" : apexRatioPct >= 10 ? "CAUTION" : apexRatioPct >= 5 ? "WARNING" : totalPrincipal === 0n ? "—" : "CRITICAL";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "40px 0 60px" }}>
+      <div>
+        <h1 style={{ font: "var(--fw-bold) 34px/1 var(--font-serif)", color: "var(--text-strong)", letterSpacing: "-0.02em", margin: "0 0 8px" }}>Analytics</h1>
+        <p style={{ font: "400 14px/1 var(--font-sans)", color: "var(--text-muted)", margin: 0 }}>Real-time protocol metrics</p>
+      </div>
+
+      {/* Production Yield Reference */}
+      <Card pad="none">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
           <div>
-            <p className="text-sm font-bold">Production Yield Reference</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Live rates from Arbitrum One mainnet — what this protocol earns in production
-            </p>
+            <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 4px" }}>Production Yield Reference</h3>
+            <p style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)", margin: 0 }}>Live rates from Arbitrum One mainnet — what this protocol earns in production</p>
           </div>
           {!ratesLoading && marketRates && (
-            <span className="text-xs text-gray-400">
-              fetched {new Date(marketRates.fetchedAt).toLocaleTimeString()}
-            </span>
+            <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>fetched {new Date(marketRates.fetchedAt).toLocaleTimeString()}</span>
           )}
         </div>
-
         {ratesLoading ? (
-          <p className="px-4 py-4 text-xs text-gray-400">Fetching live mainnet rates…</p>
+          <p style={{ padding: "16px 22px", font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Fetching live mainnet rates…</p>
         ) : marketRates ? (
           <div>
-            <div className="grid grid-cols-3 divide-x divide-gray-100">
-              {/* Aave */}
-              <div className="px-4 py-4">
-                <p className="text-xs text-gray-400 mb-1">Aave V3 · USDC · Arbitrum</p>
-                <p className="text-2xl font-bold font-mono text-purple-700">{marketRates.aave.apyPct}%</p>
-                <p className="text-xs text-gray-400 mt-1">supply APY · live on-chain</p>
-              </div>
-              {/* Compound */}
-              <div className="px-4 py-4">
-                <p className="text-xs text-gray-400 mb-1">Compound V3 · USDC · Arbitrum</p>
-                <p className="text-2xl font-bold font-mono text-blue-700">{marketRates.compound.apyPct}%</p>
-                <p className="text-xs text-gray-400 mt-1">supply APY · live on-chain</p>
-              </div>
-              {/* Blended */}
-              <div className="px-4 py-4 bg-gray-50">
-                <p className="text-xs text-gray-400 mb-1">Blended (60% Aave · 40% Compound)</p>
-                <p className="text-2xl font-bold font-mono">{marketRates.blended.apyPct}%</p>
-                <p className="text-xs text-gray-400 mt-1">production strategy yield</p>
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: "1px solid var(--border-soft)" }}>
+              {[
+                { label: "Aave V3 · USDC · Arbitrum", apy: marketRates.aave.apyPct, color: "var(--seam-600)", sub: "supply APY · live on-chain" },
+                { label: "Compound V3 · USDC · Arbitrum", apy: marketRates.compound.apyPct, color: "var(--accent-500)", sub: "supply APY · live on-chain" },
+                { label: "Blended (60% Aave · 40% Compound)", apy: marketRates.blended.apyPct, color: "var(--text-strong)", sub: "production strategy yield" },
+              ].map((col, i) => (
+                <div key={col.label} style={{ padding: "16px 22px", borderRight: i < 2 ? "1px solid var(--border-soft)" : "none", background: i === 2 ? "var(--surface-sunken)" : undefined }}>
+                  <div style={{ ...eyebrow, marginBottom: "8px" }}>{col.label}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "24px", color: col.color, fontVariantNumeric: "tabular-nums" }}>{col.apy}%</div>
+                  <div style={{ font: "400 11px/1 var(--font-sans)", color: "var(--text-faint)", marginTop: "5px" }}>{col.sub}</div>
+                </div>
+              ))}
             </div>
-
-            {/* Realistic tranche targets based on live rates */}
-            <div className="border-t border-gray-100 px-4 py-3 bg-gray-50">
-              <p className="text-xs text-gray-500 mb-2 font-medium">
-                Realistic APY targets at {marketRates.blended.apyPct}% blended yield · 15% APEX buffer
-              </p>
-              <div className="flex gap-6 text-xs font-mono">
-                <span>
-                  <span className="text-green-700 font-bold">CORE</span>{" "}
-                  {(marketRates.suggestedTargets.coreMinBps / 100).toFixed(2)}%
-                  –{(marketRates.suggestedTargets.coreMaxBps / 100).toFixed(2)}%
-                  <span className="text-gray-400 ml-1">(guaranteed)</span>
-                </span>
-                <span>
-                  <span className="text-yellow-700 font-bold">SEAM</span>{" "}
-                  {(marketRates.suggestedTargets.seamMinBps / 100).toFixed(2)}%
-                  –{(marketRates.suggestedTargets.seamMaxBps / 100).toFixed(2)}%
-                  <span className="text-gray-400 ml-1">(guaranteed)</span>
-                </span>
-                <span>
-                  <span className="text-red-700 font-bold">APEX</span>{" "}
-                  {(
-                    (marketRates.blended.apyBps
-                      - marketRates.suggestedTargets.coreMaxBps * 0.425
-                      - marketRates.suggestedTargets.seamMaxBps * 0.425) /
-                    15
-                    / 100
-                  ).toFixed(1)}%+
-                  <span className="text-gray-400 ml-1">(leveraged residual)</span>
-                </span>
+            <div style={{ padding: "14px 22px", background: "var(--surface-sunken)", borderTop: "1px solid var(--border-soft)" }}>
+              <p style={{ font: "var(--fw-medium) 12px/1 var(--font-sans)", color: "var(--text-muted)", margin: "0 0 8px" }}>Realistic APY targets at {marketRates.blended.apyPct}% blended yield · 15% APEX buffer</p>
+              <div style={{ display: "flex", gap: "24px", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
+                <span><span style={{ color: "var(--core-600)", fontWeight: 700 }}>CORE</span> {(marketRates.suggestedTargets.coreMinBps / 100).toFixed(2)}%–{(marketRates.suggestedTargets.coreMaxBps / 100).toFixed(2)}% <span style={{ color: "var(--text-faint)" }}>(guaranteed)</span></span>
+                <span><span style={{ color: "var(--seam-600)", fontWeight: 700 }}>SEAM</span> {(marketRates.suggestedTargets.seamMinBps / 100).toFixed(2)}%–{(marketRates.suggestedTargets.seamMaxBps / 100).toFixed(2)}% <span style={{ color: "var(--text-faint)" }}>(guaranteed)</span></span>
+                <span><span style={{ color: "var(--apex-600)", fontWeight: 700 }}>APEX</span> {((marketRates.blended.apyBps - marketRates.suggestedTargets.coreMaxBps * 0.425 - marketRates.suggestedTargets.seamMaxBps * 0.425) / 15 / 100).toFixed(1)}%+ <span style={{ color: "var(--text-faint)" }}>(leveraged residual)</span></span>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
-                Current testnet vault targets (CORE 2.5%, SEAM 5%) exceed blended yield — will be updated via governance to match production rates.
-              </p>
             </div>
           </div>
         ) : (
-          <p className="px-4 py-4 text-xs text-red-500">Failed to fetch mainnet rates.</p>
+          <p style={{ padding: "16px 22px", font: "400 12px/1 var(--font-sans)", color: "var(--danger)" }}>Failed to fetch mainnet rates.</p>
         )}
-      </div>
+      </Card>
 
       {/* Top stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <StatBox label="Total TVL"       value={loading ? "—" : formatUsdc(totalTVL)}       sub="principal + yield" />
-        <StatBox label="Total Principal" value={loading ? "—" : formatUsdc(totalPrincipal)} />
-        <StatBox label="Accrued Yield"   value={loading ? "—" : formatUsdc(totalYield)}     sub={`Epoch #${epochCount.toString()}`} />
-        <StatBox label="APEX Buffer"     value={loading ? "—" : `${apexRatioPct.toFixed(1)}%`} sub="of total principal" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <Card pad="md"><StatTile label="Total TVL"       value={loading ? "—" : formatUsdc(totalTVL)}               sub="principal + yield" /></Card>
+        <Card pad="md"><StatTile label="Total Principal" value={loading ? "—" : formatUsdc(totalPrincipal)} /></Card>
+        <Card pad="md"><StatTile label="Accrued Yield"   value={loading ? "—" : formatUsdc(totalYield)}             sub={`Epoch #${epochCount.toString()}`} /></Card>
+        <Card pad="md"><StatTile label="APEX Buffer"     value={loading ? "—" : `${apexRatioPct.toFixed(1)}%`}      sub="of total principal" /></Card>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-        {/* TVL Breakdown */}
-        <div className="border border-gray-200 p-4">
-          <p className="text-sm font-bold mb-4">TVL Breakdown</p>
-          <TierBar label="CORE" value={corePrincipal} total={totalPrincipal} color="bg-black" />
-          <TierBar label="SEAM" value={seamPrincipal} total={totalPrincipal} color="bg-gray-500" />
-          <TierBar label="APEX" value={apexPrincipal} total={totalPrincipal} color="bg-gray-300" />
-          <div className="border-t border-gray-100 mt-3 pt-3">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Total</span>
-              <span className="font-mono font-bold">{formatUsdc(totalPrincipal)}</span>
-            </div>
+      {/* TVL Breakdown + APY Targets */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <Card pad="lg">
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 18px" }}>TVL Breakdown</h3>
+          {([
+            { label: "CORE", value: corePrincipal, tone: "core" as const },
+            { label: "SEAM", value: seamPrincipal, tone: "seam" as const },
+            { label: "APEX", value: apexPrincipal, tone: "apex" as const },
+          ] as const).map((row) => {
+            const p = tierPct(row.value);
+            return (
+              <div key={row.label} style={{ marginBottom: "14px" }}>
+                <StrataBar label={row.label} valueLabel={`${formatUsdc(row.value)} (${p.toFixed(1)}%)`} value={p} tone={row.tone} height={10} />
+              </div>
+            );
+          })}
+          <div style={{ borderTop: "1px solid var(--border-soft)", paddingTop: "12px", display: "flex", justifyContent: "space-between" }}>
+            <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Total</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: "13px", fontVariantNumeric: "tabular-nums" }}>{formatUsdc(totalPrincipal)}</span>
           </div>
-        </div>
+        </Card>
 
-        {/* APY Targets */}
-        <div className="border border-gray-200 p-4">
-          <p className="text-sm font-bold mb-4">APY Targets</p>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="font-bold">CORE</span>
-                <span className="text-xs text-gray-400 ml-2">Stable</span>
+        <Card pad="lg">
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 18px" }}>APY Targets</h3>
+          {[
+            { name: "CORE", sub: "Stable",     min: coreMin, max: coreMax, tone: "core" as const },
+            { name: "SEAM", sub: "Balanced",   min: seamMin, max: seamMax, tone: "seam" as const },
+          ].map((row) => (
+            <div key={row.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Badge tone={row.tone}>{row.name}</Badge>
+                <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>{row.sub}</span>
               </div>
-              <span className="font-mono">{bpsToPercent(coreMin)} – {bpsToPercent(coreMax)}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{bpsToPercent(row.min)} – {bpsToPercent(row.max)}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="font-bold">SEAM</span>
-                <span className="text-xs text-gray-400 ml-2">Balanced</span>
-              </div>
-              <span className="font-mono">{bpsToPercent(seamMin)} – {bpsToPercent(seamMax)}</span>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Badge tone="apex">APEX</Badge>
+              <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Aggressive</span>
             </div>
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="font-bold">APEX</span>
-                <span className="text-xs text-gray-400 ml-2">Aggressive</span>
-              </div>
-              <div className="text-right">
-                <span className="font-mono text-gray-500">Residual</span>
-                {apexLeverage !== "—" && (
-                  <span className="block text-xs text-gray-400">{apexLeverage}× CORE rate</span>
-                )}
-              </div>
+            <div style={{ textAlign: "right" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--text-faint)" }}>Residual</span>
+              {apexLeverage !== "—" && (
+                <div style={{ font: "400 11px/1 var(--font-sans)", color: "var(--text-faint)", marginTop: "3px" }}>{apexLeverage}× CORE rate</div>
+              )}
             </div>
           </div>
-          <div className="border-t border-gray-100 mt-4 pt-3 text-xs text-gray-400">
-            Targets updated by AI agent via governance proposals.
+          <div style={{ borderTop: "1px solid var(--border-soft)", paddingTop: "12px" }}>
+            <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-faint)", margin: 0 }}>Targets updated by AI agent via governance proposals.</p>
           </div>
-        </div>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-        {/* Yield Breakdown */}
-        <div className="border border-gray-200 p-4">
-          <p className="text-sm font-bold mb-4">Accrued Yield by Tier</p>
-          <div className="space-y-2 text-sm font-mono">
-            <div className="flex justify-between">
-              <span className="text-gray-500">CORE</span>
-              <span className="text-green-700">+{formatUsdc(coreYield)}</span>
+      {/* Yield + Strategy */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <Card pad="lg">
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 18px" }}>Accrued Yield by Tier</h3>
+          {([
+            { label: "CORE", v: coreYield },
+            { label: "SEAM", v: seamYield },
+            { label: "APEX", v: apexYield },
+          ] as const).map((row) => (
+            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+              <span style={{ font: "400 13px/1 var(--font-sans)", color: "var(--text-muted)" }}>{row.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>+{formatUsdc(row.v)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">SEAM</span>
-              <span className="text-green-700">+{formatUsdc(seamYield)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">APEX</span>
-              <span className="text-green-700">+{formatUsdc(apexYield)}</span>
-            </div>
-            <div className="flex justify-between border-t border-gray-100 pt-2">
-              <span className="text-gray-400">Total (current epoch)</span>
-              <span className="text-green-700 font-bold">+{formatUsdc(totalYield)}</span>
-            </div>
-            {epochs.length > 0 && (
-              <div className="flex justify-between border-t border-gray-100 pt-2">
-                <span className="text-gray-400">All-time settled</span>
-                <span className="text-green-700">+{formatUsdc(historicTotalYield)}</span>
-              </div>
-            )}
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-soft)", paddingTop: "10px", marginTop: "4px" }}>
+            <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Total (current epoch)</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 700, color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>+{formatUsdc(totalYield)}</span>
           </div>
+          {epochs.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-soft)", paddingTop: "10px", marginTop: "6px" }}>
+              <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>All-time settled</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>+{formatUsdc(historicTotalYield)}</span>
+            </div>
+          )}
           {pendingPenalties > 0n && (
-            <div className="mt-3 text-xs text-blue-600 bg-blue-50 p-2">
+            <div style={{ marginTop: "12px", padding: "8px 12px", background: "var(--surface-sunken)", borderRadius: "var(--r-md)", font: "400 12px/1 var(--font-sans)", color: "var(--accent-600)" }}>
               {formatUsdc(pendingPenalties)} early-withdraw penalties pending redistribution
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* Strategy */}
-        <div className="border border-gray-200 p-4">
-          <p className="text-sm font-bold mb-4">Strategy</p>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Total Deployed</span>
-              <span className="font-mono">{formatUsdc(strategyTotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Epochs Settled</span>
-              <span className="font-mono">{epochCount.toString()}</span>
-            </div>
+        <Card pad="lg">
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 18px" }}>Strategy Overview</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+            <span style={{ font: "400 13px/1 var(--font-sans)", color: "var(--text-muted)" }}>Total Deployed</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontVariantNumeric: "tabular-nums" }}>{formatUsdc(strategyTotal)}</span>
           </div>
-          <div className="mt-4 text-xs text-gray-400 border-t border-gray-100 pt-3">
-            AaveV3 + FixedYield strategies active on Arbitrum Sepolia.
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ font: "400 13px/1 var(--font-sans)", color: "var(--text-muted)" }}>Epochs Settled</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px" }}>{epochCount.toString()}</span>
           </div>
-        </div>
+          <div style={{ borderTop: "1px solid var(--border-soft)", marginTop: "16px", paddingTop: "12px" }}>
+            <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-faint)", margin: 0 }}>SimAave + SimCamelot + SimMorpho strategies active on Arbitrum Sepolia.</p>
+          </div>
+        </Card>
       </div>
 
-      {/* APEX buffer gauge */}
-      <div className="border border-gray-200 p-4 mb-8">
-        <div className="flex justify-between items-center mb-3">
-          <p className="text-sm font-bold">APEX Buffer Ratio</p>
-          <span className={`text-xs px-2 py-1 font-bold ${
-            apexRatioPct >= 20 ? "bg-green-100 text-green-700" :
-            apexRatioPct >= 10 ? "bg-yellow-100 text-yellow-700" :
-            apexRatioPct >= 5  ? "bg-orange-100 text-orange-700" :
-                                  "bg-red-100 text-red-700"
-          }`}>
-            {apexRatioPct >= 20 ? "HEALTHY" : apexRatioPct >= 10 ? "CAUTION" : apexRatioPct >= 5 ? "WARNING" : totalPrincipal === 0n ? "—" : "CRITICAL"}
-          </span>
+      {/* APEX Buffer gauge */}
+      <Card pad="lg">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: 0 }}>APEX Buffer Ratio</h3>
+          <Badge tone={bufferTone}>{bufferLabel}</Badge>
         </div>
-        <div className="h-3 bg-gray-100 w-full mb-2">
-          <div
-            className={`h-3 transition-all ${
-              apexRatioPct >= 20 ? "bg-green-500" :
-              apexRatioPct >= 10 ? "bg-yellow-400" :
-              apexRatioPct >= 5  ? "bg-orange-400" : "bg-red-500"
-            }`}
-            style={{ width: `${Math.min(apexRatioPct, 100)}%` }}
-          />
+        <StrataBar value={Math.min(apexRatioPct, 100)} tone={bufferTone} height={12} valueLabel={`${apexRatioPct.toFixed(2)}%`} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
+          <span style={{ font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)" }}>0%</span>
+          <span style={{ font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)" }}>100%</span>
         </div>
-        <div className="flex justify-between text-xs text-gray-400">
-          <span>0%</span>
-          <span>Current: <span className="font-mono font-bold text-black">{apexRatioPct.toFixed(2)}%</span></span>
-          <span>100%</span>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p style={{ font: "400 12px/1.4 var(--font-sans)", color: "var(--text-faint)", marginTop: "10px" }}>
           APEX principal acts as a first-loss buffer for CORE and SEAM depositors. Below 10% triggers caution.
         </p>
-      </div>
+      </Card>
 
-      {/* Live Strategy Farming ─────────────────────────────────────────────── */}
-      <div className="border border-gray-200 mb-8">
-        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200">
-          <p className="text-sm font-bold">Live Strategy Farming</p>
-          <div className="text-xs text-gray-400 font-mono flex items-center gap-3">
-            {blendedBps !== null && (
-              <span className="text-green-700 font-bold">
-                Blended yield: {(blendedBps / 100).toFixed(2)}%
-              </span>
-            )}
-            <span>Total: {formatUsdc(routerTotal)}</span>
+      {/* Live Strategy Farming */}
+      <Card pad="none">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
+          <div>
+            <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 2px" }}>Live Strategy Farming</h3>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
+            {blendedBps !== null && <span style={{ color: "var(--positive)", fontWeight: 700 }}>Blended: {(blendedBps / 100).toFixed(2)}%</span>}
+            <span style={{ color: "var(--text-faint)" }}>Total: {formatUsdc(routerTotal)}</span>
           </div>
         </div>
-
         {routerStrategies.length === 0 ? (
-          <p className="px-4 py-6 text-xs text-gray-400">Loading strategy data…</p>
+          <p style={{ padding: "24px 22px", font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Loading strategy data…</p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div>
             {routerStrategies.map((s) => {
-              const meta      = getMeta(s.name);
-              const stratApy  = apyByAddr[s.addr.toLowerCase()] ?? null;
+              const meta = getMeta(s.name);
+              const stratApy = apyByAddr[s.addr.toLowerCase()] ?? null;
               const actualPct = routerTotal > 0n ? Number((s.deployed * 10000n) / routerTotal) / 100 : 0;
               const targetPct = s.weight / 100;
-              const drift     = Math.abs(actualPct - targetPct).toFixed(1);
-
+              const drift = Math.abs(actualPct - targetPct).toFixed(1);
               return (
-                <div key={s.addr} className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${meta.color} mt-0.5 flex-shrink-0`} />
-                      <div>
-                        <span className="text-sm font-bold">{meta.protocol}</span>
-                        <span className="text-xs text-gray-400 ml-2">· {meta.asset} · Arbitrum Sepolia</span>
-                        {!s.active && <span className="text-xs text-gray-400 border border-gray-200 px-1 ml-2">inactive</span>}
-                      </div>
+                <div key={s.addr} style={{ padding: "18px 22px", borderBottom: "1px solid var(--border-soft)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "var(--r-pill)", background: meta.accentColor, display: "inline-block", flexShrink: 0 }} />
+                      <span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "14px", color: "var(--text-strong)" }}>{meta.protocol}</span>
+                      <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>· {meta.asset} · Arbitrum Sepolia</span>
+                      {!s.active && <Badge tone="neutral">inactive</Badge>}
                     </div>
-                    <div className="text-right">
+                    <div>
                       {stratApy !== null ? (
-                        <span className="text-sm font-bold font-mono text-green-700">
-                          {(stratApy / 100).toFixed(2)}% APY
-                          <span className="text-xs text-green-500 ml-1">live</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: "14px", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>
+                          {(stratApy / 100).toFixed(2)}% <span style={{ fontSize: "11px", color: "var(--positive)", opacity: 0.7 }}>live</span>
                         </span>
-                      ) : <span className="text-xs text-gray-400">—</span>}
+                      ) : <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>—</span>}
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 mb-3 ml-4">{meta.description}</p>
-                  <div className="ml-4">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span className="font-mono">{formatUsdc(s.deployed)} deployed</span>
-                      <span>
-                        <span className={`font-mono ${Math.abs(actualPct - targetPct) > 5 ? "text-orange-600" : "text-gray-500"}`}>
-                          {actualPct.toFixed(1)}% actual
-                        </span>
-                        <span className="text-gray-300 mx-1">/</span>
-                        <span className="font-mono">{targetPct.toFixed(0)}% target</span>
-                        {parseFloat(drift) > 1 && <span className="text-orange-500 ml-1">(±{drift}%)</span>}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-100 w-full relative">
-                      <div className={`h-2 transition-all ${meta.color}`} style={{ width: `${Math.min(actualPct, 100)}%` }} />
-                      <div className="absolute top-0 h-2 w-0.5 bg-gray-500" style={{ left: `${Math.min(targetPct, 100)}%` }} />
-                    </div>
+                  <p style={{ font: "400 12px/1.4 var(--font-sans)", color: "var(--text-faint)", margin: "0 0 10px 16px" }}>{meta.description}</p>
+                  <div style={{ paddingLeft: "16px" }}>
+                    <StrataBar
+                      label={`${formatUsdc(s.deployed)} deployed`}
+                      valueLabel={`${actualPct.toFixed(1)}% actual / ${targetPct.toFixed(0)}% target${parseFloat(drift) > 1 ? ` (±${drift}%)` : ""}`}
+                      value={Math.min(actualPct, 100)}
+                      target={Math.min(targetPct, 100)}
+                      tone={parseFloat(drift) > 5 ? "warning" : "core"}
+                      height={8}
+                    />
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-400">
-          AI agent monitors allocation drift and triggers rebalancing when actual weight diverges from target by more than the configured threshold.
-        </div>
-      </div>
-
-      {/* Protocol Market Mechanics ───────────────────────────────────────────── */}
-      <div className="border border-gray-200 mb-8">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <p className="text-sm font-bold">Protocol Market Mechanics</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            APY derived from real DeFi protocol models — not fixed rates
+        <div style={{ padding: "12px 22px", background: "var(--surface-sunken)", borderTop: "1px solid var(--border-soft)" }}>
+          <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-faint)", margin: 0 }}>
+            AI agent monitors allocation drift and triggers rebalancing when actual weight diverges from target by more than the configured threshold.
           </p>
         </div>
+      </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
-
-          {/* Aave V3 — utilization curve */}
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-purple-600" />
-              <span className="text-xs font-bold text-purple-700">Aave V3 Interest Rate Model</span>
+      {/* Protocol Market Mechanics */}
+      <Card pad="none">
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 2px" }}>Protocol Market Mechanics</h3>
+          <p style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)", margin: 0 }}>APY derived from real DeFi protocol models — not fixed rates</p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
+          {/* Aave */}
+          <div style={{ padding: "18px 22px", borderRight: "1px solid var(--border-soft)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "14px" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "var(--r-pill)", background: "var(--seam-600)", display: "inline-block" }} />
+              <span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "12px", color: "var(--seam-700)" }}>Aave V3 Interest Rate Model</span>
             </div>
             {aaveState ? (
               <>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-500">Pool Utilization</span>
-                    <span className="font-mono font-bold">{(Number(aaveState.utilization) / 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="h-3 bg-gray-100 w-full relative">
-                    <div className="h-3 bg-purple-500 transition-all" style={{ width: `${Number(aaveState.utilization) / 100}%` }} />
-                    {/* Kink at 80% */}
-                    <div className="absolute top-0 h-3 w-0.5 bg-gray-400" style={{ left: "80%" }} title="Optimal (kink) at 80%" />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-300 mt-0.5">
-                    <span>0%</span>
-                    <span className="text-gray-400">kink 80%</span>
-                    <span>100%</span>
-                  </div>
-                </div>
-                <div className="space-y-1 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">slope1 (below kink)</span>
-                    <span>7.00%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">slope2 (above kink)</span>
-                    <span>75.00%</span>
-                  </div>
-                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
-                    <span className="text-gray-600 font-bold">Supply APY</span>
-                    <span className="text-purple-700 font-bold">{(Number(aaveState.supplyApy) / 100).toFixed(2)}%</span>
-                  </div>
+                <StrataBar label="Pool Utilization" valueLabel={`${(Number(aaveState.utilization) / 100).toFixed(1)}%`} value={Number(aaveState.utilization) / 100} target={80} height={10} tone="seam" style={{ marginBottom: "12px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "5px" }}><span>slope1 (below kink)</span><span>7.00%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "8px" }}><span>slope2 (above kink)</span><span>75.00%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-soft)", paddingTop: "8px", fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 700 }}>
+                  <span style={{ color: "var(--text-body)" }}>Supply APY</span>
+                  <span style={{ color: "var(--seam-600)", fontVariantNumeric: "tabular-nums" }}>{(Number(aaveState.supplyApy) / 100).toFixed(2)}%</span>
                 </div>
               </>
-            ) : <p className="text-xs text-gray-400">Loading…</p>}
+            ) : <p style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Loading…</p>}
           </div>
 
-          {/* Camelot V3 — LP fee model */}
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-orange-500" />
-              <span className="text-xs font-bold text-orange-600">Camelot V3 LP Fee Model</span>
+          {/* Camelot */}
+          <div style={{ padding: "18px 22px", borderRight: "1px solid var(--border-soft)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "14px" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "var(--r-pill)", background: "var(--apex-500)", display: "inline-block" }} />
+              <span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "12px", color: "var(--apex-600)" }}>Camelot V3 LP Fee Model</span>
             </div>
             {camelotState ? (
               <>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-500">Daily Volume / TVL</span>
-                    <span className="font-mono font-bold">{(Number(camelotState.volumeRatio) / 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="h-3 bg-gray-100 w-full">
-                    <div className="h-3 bg-orange-400 transition-all" style={{ width: `${Math.min(Number(camelotState.volumeRatio) / 200, 100)}%` }} />
-                  </div>
-                  <p className="text-xs text-gray-300 mt-0.5">bar scaled to 200% TVL max</p>
+                <StrataBar label="Daily Volume / TVL" valueLabel={`${(Number(camelotState.volumeRatio) / 100).toFixed(1)}%`} value={Math.min(Number(camelotState.volumeRatio) / 200, 100)} height={10} tone="apex" style={{ marginBottom: "12px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "5px" }}><span>fee tier</span><span>{(Number(camelotState.feeTier) / 100).toFixed(2)}%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "8px" }}><span>daily fee rate</span><span>{(Number(camelotState.dailyFeeRate) / 100).toFixed(3)}% / day</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-soft)", paddingTop: "8px", fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 700 }}>
+                  <span style={{ color: "var(--text-body)" }}>LP APY</span>
+                  <span style={{ color: "var(--apex-600)", fontVariantNumeric: "tabular-nums" }}>{(Number(camelotState.lpApy) / 100).toFixed(2)}%</span>
                 </div>
-                <div className="space-y-1 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">fee tier</span>
-                    <span>{(Number(camelotState.feeTier) / 100).toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">daily fee rate</span>
-                    <span>{(Number(camelotState.dailyFeeRate) / 100).toFixed(3)}% / day</span>
-                  </div>
-                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
-                    <span className="text-gray-600 font-bold">LP APY</span>
-                    <span className="text-orange-600 font-bold">{(Number(camelotState.lpApy) / 100).toFixed(2)}%</span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  APY = vol/TVL × feeTier × 365 — standard Uniswap V3 analytics formula
-                </p>
+                <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-faint)", marginTop: "8px" }}>APY = vol/TVL × feeTier × 365 — standard Uniswap V3 analytics formula</p>
               </>
-            ) : <p className="text-xs text-gray-400">Loading…</p>}
+            ) : <p style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Loading…</p>}
           </div>
 
-          {/* Morpho — P2P rate model */}
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-blue-600" />
-              <span className="text-xs font-bold text-blue-700">Morpho Blue P2P Model</span>
+          {/* Morpho */}
+          <div style={{ padding: "18px 22px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "14px" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "var(--r-pill)", background: "var(--accent-500)", display: "inline-block" }} />
+              <span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "12px", color: "var(--accent-600)" }}>Morpho Blue P2P Model</span>
             </div>
             {morphoState ? (
               <>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-500">Matching Ratio (P2P)</span>
-                    <span className="font-mono font-bold">{(Number(morphoState.matchingRatio) / 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="h-3 bg-gray-100 w-full">
-                    <div className="h-3 bg-blue-500 transition-all" style={{ width: `${Number(morphoState.matchingRatio) / 100}%` }} />
-                  </div>
+                <StrataBar label="Matching Ratio (P2P)" valueLabel={`${(Number(morphoState.matchingRatio) / 100).toFixed(1)}%`} value={Number(morphoState.matchingRatio) / 100} height={10} tone="accent" style={{ marginBottom: "12px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "5px" }}><span>Aave supply rate</span><span>{(Number(morphoState.supplyApy) / 100).toFixed(2)}%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "5px" }}><span>Aave borrow rate</span><span>{(Number(morphoState.borrowApy) / 100).toFixed(2)}%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)", marginBottom: "8px" }}><span>P2P rate (midpoint)</span><span>{(Number(morphoState.p2pRate) / 100).toFixed(2)}%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-soft)", paddingTop: "8px", fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 700 }}>
+                  <span style={{ color: "var(--text-body)" }}>Blended APY</span>
+                  <span style={{ color: "var(--accent-600)", fontVariantNumeric: "tabular-nums" }}>{(Number(morphoState.blendedApy) / 100).toFixed(2)}%</span>
                 </div>
-                <div className="space-y-1 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Aave supply rate</span>
-                    <span>{(Number(morphoState.supplyApy) / 100).toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Aave borrow rate</span>
-                    <span>{(Number(morphoState.borrowApy) / 100).toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">P2P rate (midpoint)</span>
-                    <span>{(Number(morphoState.p2pRate) / 100).toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
-                    <span className="text-gray-600 font-bold">Blended APY</span>
-                    <span className="text-blue-700 font-bold">{(Number(morphoState.blendedApy) / 100).toFixed(2)}%</span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  Blended = matched% × P2P + unmatched% × supply
-                </p>
+                <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-faint)", marginTop: "8px" }}>Blended = matched% × P2P + unmatched% × supply</p>
               </>
-            ) : <p className="text-xs text-gray-400">Loading…</p>}
+            ) : <p style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Loading…</p>}
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Rebalancing History ─────────────────────────────────────────────────── */}
-      <div className="border border-gray-200 mb-8">
-        <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+      {/* Rebalancing History */}
+      <Card pad="none">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
           <div>
-            <p className="text-sm font-bold">Rebalancing History</p>
-            <p className="text-xs text-gray-400 mt-0.5">On-chain rebalance events triggered by the AI agent</p>
+            <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 2px" }}>Rebalancing History</h3>
+            <p style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)", margin: 0 }}>On-chain rebalance events triggered by the AI agent</p>
           </div>
-          {rebalanceLoading && <span className="text-xs text-gray-400">Loading…</span>}
-          {!rebalanceLoading && rebalanceEvents.length === 0 && (
-            <span className="text-xs text-gray-400">No rebalances yet</span>
-          )}
+          {rebalanceLoading && <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Loading…</span>}
+          {!rebalanceLoading && rebalanceEvents.length === 0 && <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>No rebalances yet</span>}
         </div>
-
         {rebalanceEvents.length > 0 ? (
-          <table className="w-full text-xs">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr className="border-b border-gray-100 text-gray-400">
-                <th className="text-left px-4 py-2">#</th>
-                <th className="text-left px-4 py-2">Timestamp</th>
-                <th className="text-left px-4 py-2">Initiator</th>
-                <th className="text-right px-4 py-2">Total Assets</th>
-                <th className="text-right px-4 py-2">Block</th>
+              <tr>
+                {["#", "Timestamp", "Initiator", "Total Assets", "Block"].map((h, i) => (
+                  <th key={h} style={{ ...thStyle, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {rebalanceEvents.map((e, i) => (
-                <tr key={e.blockNumber.toString()} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-400 font-mono">#{rebalanceEvents.length - i}</td>
-                  <td className="px-4 py-3 font-mono">{formatTs(e.timestamp)}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-gray-600">{shortAddr(e.initiator)}</span>
+                <tr key={e.blockNumber.toString()} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                  <td style={{ padding: "12px 22px", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-faint)" }}>#{rebalanceEvents.length - i}</td>
+                  <td style={{ padding: "12px 22px", fontFamily: "var(--font-mono)", fontSize: "12px" }}>{formatTs(e.timestamp)}</td>
+                  <td style={{ padding: "12px 22px" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-body)" }}>{shortAddr(e.initiator)}</span>
                     {e.initiator.toLowerCase() === "0x22a90658cdcdbdf89841ca2d37efc489de9bb71a" && (
-                      <span className="ml-2 text-blue-600 border border-blue-200 px-1">AI Agent</span>
+                      <Badge tone="core" mono style={{ marginLeft: "8px" }}>AI Agent</Badge>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-green-700">{formatUsdc(e.totalAssets)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-gray-400">{e.blockNumber.toString()}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>{formatUsdc(e.totalAssets)}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-faint)" }}>{e.blockNumber.toString()}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
           !rebalanceLoading && (
-            <div className="px-4 py-6 text-xs text-gray-400">
-              <p>No rebalancing events found. The AI agent will rebalance when:</p>
-              <ul className="mt-2 space-y-1 list-disc list-inside">
-                <li>Strategy weight drift exceeds threshold</li>
-                <li>Governance proposal changes target weights</li>
-                <li>Epoch settles with significant yield discrepancy</li>
+            <div style={{ padding: "24px 22px" }}>
+              <p style={{ font: "400 12px/1.4 var(--font-sans)", color: "var(--text-faint)", margin: "0 0 8px" }}>No rebalancing events found. The AI agent will rebalance when:</p>
+              <ul style={{ margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                {["Strategy weight drift exceeds threshold", "Governance proposal changes target weights", "Epoch settles with significant yield discrepancy"].map((t) => (
+                  <li key={t} style={{ font: "400 12px/1.4 var(--font-sans)", color: "var(--text-faint)" }}>{t}</li>
+                ))}
               </ul>
             </div>
           )
         )}
-      </div>
+      </Card>
 
-      {/* Epoch History — populated from EpochSettled on-chain events */}
-      <div className="border border-gray-200">
-        <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-          <p className="text-sm font-bold">Epoch History</p>
-          {histLoading && <span className="text-xs text-gray-400">Loading...</span>}
-          {!histLoading && !histError && epochs.length === 0 && (
-            <span className="text-xs text-gray-400">No epochs settled yet</span>
-          )}
-          {histError && <span className="text-xs text-red-500">{histError}</span>}
+      {/* Epoch History */}
+      <Card pad="none">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: 0 }}>Epoch History</h3>
+          {histLoading && <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>Loading…</span>}
+          {!histLoading && !histError && epochs.length === 0 && <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>No epochs settled yet</span>}
+          {histError && <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--danger)" }}>{histError}</span>}
         </div>
         {epochs.length > 0 && (
-          <table className="w-full text-sm">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr className="border-b border-gray-100 text-xs text-gray-400">
-                <th className="text-left px-4 py-2">Epoch</th>
-                <th className="text-right px-4 py-2">Total Yield</th>
-                <th className="text-right px-4 py-2">CORE</th>
-                <th className="text-right px-4 py-2">SEAM</th>
-                <th className="text-right px-4 py-2">APEX</th>
-                <th className="text-right px-4 py-2">Implied APY</th>
+              <tr>
+                {["Epoch", "Total Yield", "CORE", "SEAM", "APEX", "Implied APY"].map((h, i) => (
+                  <th key={h} style={{ ...thStyle, textAlign: i === 0 ? "left" : "right" }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {[...epochs].reverse().map((e) => (
-                <tr key={e.epochId.toString()} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500">#{e.epochId.toString()}</td>
-                  <td className="px-4 py-3 text-right font-mono text-green-700 text-xs">+{formatUsdc(e.totalYield)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs">{formatUsdc(e.coreShare)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs">{formatUsdc(e.seamShare)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs">{formatUsdc(e.apexShare)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-600">{epochAPY(e.totalYield)}</td>
+                <tr key={e.epochId.toString()} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                  <td style={{ padding: "12px 22px", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-faint)" }}>#{e.epochId.toString()}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>+{formatUsdc(e.totalYield)}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", fontVariantNumeric: "tabular-nums" }}>{formatUsdc(e.coreShare)}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", fontVariantNumeric: "tabular-nums" }}>{formatUsdc(e.seamShare)}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", fontVariantNumeric: "tabular-nums" }}>{formatUsdc(e.apexShare)}</td>
+                  <td style={{ padding: "12px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-muted)" }}>{epochAPY(e.totalYield)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="text-xs text-gray-400 bg-gray-50">
-                <td className="px-4 py-2 font-bold text-gray-600">Total</td>
-                <td className="px-4 py-2 text-right font-mono font-bold text-green-700">+{formatUsdc(historicTotalYield)}</td>
-                <td colSpan={4} className="px-4 py-2 text-right text-gray-400">
-                  Implied APY uses current principal as denominator (approximation)
-                </td>
+              <tr style={{ background: "var(--surface-sunken)" }}>
+                <td style={{ padding: "10px 22px", fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "12px", color: "var(--text-body)" }}>Total</td>
+                <td style={{ padding: "10px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", fontWeight: 700, color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>+{formatUsdc(historicTotalYield)}</td>
+                <td colSpan={4} style={{ padding: "10px 22px", textAlign: "right", font: "400 11px/1 var(--font-sans)", color: "var(--text-faint)" }}>Implied APY uses current principal as denominator (approximation)</td>
               </tr>
             </tfoot>
           </table>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

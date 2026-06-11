@@ -2,6 +2,9 @@
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { GOVERNOR_ADDRESS, GOVERNOR_ABI } from "../lib/contracts";
 import { bpsToPercent } from "../lib/utils";
+import { Card } from "./ui/Card";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
 
 export function AgentPanel() {
   const { isConnected } = useAccount();
@@ -16,54 +19,81 @@ export function AgentPanel() {
 
   if (error || !proposal) {
     return (
-      <div className="border border-gray-200 p-4">
-        <p className="text-sm font-bold mb-1">AI Agent</p>
-        <p className="text-sm text-gray-400">No proposals yet.</p>
-      </div>
+      <Card surface="ink" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: "var(--r-pill)",
+          background: "var(--text-faint)", flex: "none",
+        }} />
+        <p style={{ font: "var(--fw-medium) var(--text-sm)/1 var(--font-sans)", color: "var(--text-inverse)", opacity: 0.6, margin: 0 }}>
+          AI Agent — No proposals yet.
+        </p>
+      </Card>
     );
   }
 
   const isPendingProposal = !proposal.executed && !proposal.rejected;
   const busy = isPending || isConfirming;
 
+  const statusTone = proposal.executed ? "positive" : proposal.rejected ? "neutral" : "warning";
+  const statusLabel = proposal.executed ? "EXECUTED" : proposal.rejected ? "REJECTED" : "PENDING";
+
   return (
-    <div className="border border-gray-200 p-4">
-      <div className="flex justify-between items-center mb-3">
-        <p className="text-sm font-bold">AI Agent — Proposal #{proposal.id.toString()}</p>
-        <span
-          className={`text-xs px-2 py-1 ${
-            proposal.executed
-              ? "bg-black text-white"
-              : proposal.rejected
-              ? "bg-gray-200 text-gray-500"
-              : "bg-yellow-50 text-yellow-700 border border-yellow-200"
-          }`}
-        >
-          {proposal.executed ? "EXECUTED" : proposal.rejected ? "REJECTED" : "PENDING"}
+    <Card surface="ink" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: "var(--r-pill)", flex: "none",
+          background: isPendingProposal ? "var(--warning)" : "var(--text-faint)",
+          boxShadow: isPendingProposal ? "0 0 0 3px rgba(194,134,42,0.25)" : "none",
+        }} />
+        <span style={{
+          fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "13px",
+          color: "var(--sand-50)", flex: 1,
+        }}>
+          AI Agent — Proposal #{proposal.id.toString()}
         </span>
+        <Badge tone={statusTone} mono>{statusLabel}</Badge>
       </div>
 
+      {/* Proposed ranges */}
       {isPendingProposal && (
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3 font-mono">
-          <div>
-            <span className="text-gray-400">CORE: </span>
-            {bpsToPercent(proposal.newCoreMin)} – {bpsToPercent(proposal.newCoreMax)}
-          </div>
-          <div>
-            <span className="text-gray-400">SEAM: </span>
-            {bpsToPercent(proposal.newSeamMin)} – {bpsToPercent(proposal.newSeamMax)}
-          </div>
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px",
+          background: "rgba(255,255,255,0.06)", borderRadius: "var(--r-md)", padding: "12px",
+        }}>
+          {(["CORE", "SEAM"] as const).map((t) => {
+            const [min, max] = t === "CORE"
+              ? [proposal.newCoreMin, proposal.newCoreMax]
+              : [proposal.newSeamMin, proposal.newSeamMax];
+            const tone = t === "CORE" ? "core" : "seam";
+            return (
+              <div key={t} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                <span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "10px", letterSpacing: "0.1em", color: `var(--${tone}-400)` }}>{t}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 600, color: "var(--sand-50)", fontVariantNumeric: "tabular-nums" }}>
+                  {bpsToPercent(min)} – {bpsToPercent(max)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <p className="text-xs text-gray-500 mb-3 leading-relaxed">{proposal.reason}</p>
+      {/* Reason */}
+      <p style={{ font: "400 var(--text-xs)/1.5 var(--font-sans)", color: "var(--text-inverse)", opacity: 0.65, margin: 0 }}>
+        {proposal.reason}
+      </p>
 
       {isSuccess && (
-        <p className="text-xs text-green-600 mb-2">Proposal executed on-chain.</p>
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: "12px", color: "var(--positive)", margin: 0 }}>
+          Proposal executed on-chain.
+        </p>
       )}
 
       {isPendingProposal && isConnected && (
-        <button
+        <Button
+          tone="accent"
+          size="sm"
+          disabled={busy}
           onClick={() =>
             writeContract({
               address: GOVERNOR_ADDRESS,
@@ -74,12 +104,11 @@ export function AgentPanel() {
               maxPriorityFeePerGas: 1_000_000n,
             })
           }
-          disabled={busy}
-          className="border border-black px-4 py-1 text-sm hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+          style={{ alignSelf: "flex-start" }}
         >
-          {busy ? "Accepting..." : "Accept →"}
-        </button>
+          {busy ? "Accepting…" : "Accept →"}
+        </Button>
       )}
-    </div>
+    </Card>
   );
 }

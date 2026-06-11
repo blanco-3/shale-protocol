@@ -3,8 +3,13 @@ import { useState, useEffect } from "react";
 import { useReadContracts } from "wagmi";
 import { VAULT_ADDRESS, VAULT_ABI } from "../../lib/contracts";
 import { formatUsdc } from "../../lib/utils";
+import { Card } from "../../components/ui/Card";
+import { Badge } from "../../components/ui/Badge";
+import { StatTile } from "../../components/ui/StatTile";
+import { StrataBar } from "../../components/ui/StrataBar";
 
 type SafetyLevel = "HEALTHY" | "CAUTION" | "WARNING" | "DANGER" | "CRITICAL" | "EMPTY";
+type BarTone = "positive" | "warning" | "danger" | "seam" | "core" | "apex" | "ink" | "accent";
 
 function getSafetyLevel(apexRatio: number, totalPrincipal: bigint): SafetyLevel {
   if (totalPrincipal === 0n) return "EMPTY";
@@ -16,24 +21,31 @@ function getSafetyLevel(apexRatio: number, totalPrincipal: bigint): SafetyLevel 
 }
 
 const LEVEL_CONFIG: Record<SafetyLevel, {
-  label: string; color: string; bg: string; border: string;
+  label: string; tone: BarTone; toneVar: string; toneBg: string;
   coreDeposits: boolean; apexDeposits: boolean; seniorAPY: string; desc: string;
 }> = {
-  HEALTHY:  { label: "Healthy",  color: "text-green-700",  bg: "bg-green-50",  border: "border-green-200", coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–6%",  desc: "Optimal protocol health with strong APEX buffer." },
-  CAUTION:  { label: "Caution",  color: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-200",coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–6%",  desc: "Protocol operating normally with adequate buffer." },
-  WARNING:  { label: "Warning",  color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200",coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–5%",  desc: "APEX buffer approaching critical levels." },
-  DANGER:   { label: "Danger",   color: "text-red-700",    bg: "bg-red-50",    border: "border-red-200",   coreDeposits: false, apexDeposits: true,  seniorAPY: "3–4%",  desc: "Critical buffer — CORE deposits restricted." },
-  CRITICAL: { label: "Critical", color: "text-red-900",    bg: "bg-red-100",   border: "border-red-400",   coreDeposits: false, apexDeposits: false, seniorAPY: "2–3%",  desc: "Emergency state. All deposits should be paused." },
-  EMPTY:    { label: "—",        color: "text-gray-400",   bg: "bg-gray-50",   border: "border-gray-200",  coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–6%",  desc: "No TVL yet." },
+  HEALTHY:  { label: "Healthy",  tone: "positive", toneVar: "var(--positive)",  toneBg: "var(--positive-bg)", coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–6%",  desc: "Optimal protocol health with strong APEX buffer." },
+  CAUTION:  { label: "Caution",  tone: "seam",     toneVar: "var(--seam-600)", toneBg: "var(--seam-50)",    coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–6%",  desc: "Protocol operating normally with adequate buffer." },
+  WARNING:  { label: "Warning",  tone: "warning",  toneVar: "var(--warning)",   toneBg: "var(--warning-bg)", coreDeposits: true,  apexDeposits: true,  seniorAPY: "4–5%",  desc: "APEX buffer approaching critical levels." },
+  DANGER:   { label: "Danger",   tone: "danger",   toneVar: "var(--danger)",    toneBg: "var(--danger-bg)",  coreDeposits: false, apexDeposits: true,  seniorAPY: "3–4%",  desc: "Critical buffer — CORE deposits restricted." },
+  CRITICAL: { label: "Critical", tone: "danger",   toneVar: "var(--danger)",    toneBg: "var(--danger-bg)",  coreDeposits: false, apexDeposits: false, seniorAPY: "2–3%",  desc: "Emergency state. All deposits should be paused." },
+  EMPTY:    { label: "—",        tone: "ink",      toneVar: "var(--text-muted)", toneBg: "var(--surface-sunken)", coreDeposits: true, apexDeposits: true, seniorAPY: "4–6%", desc: "No TVL yet." },
 };
 
 const LEVEL_TABLE = [
-  { level: "HEALTHY",  threshold: "≥ 20%", coreAPY: "4–6%",  desc: "All deposits enabled",                     color: "text-green-700" },
-  { level: "CAUTION",  threshold: "15–20%",coreAPY: "4–6%",  desc: "All deposits enabled",                     color: "text-yellow-700" },
-  { level: "WARNING",  threshold: "10–15%",coreAPY: "4–5%",  desc: "Monitoring closely",                       color: "text-orange-700" },
-  { level: "DANGER",   threshold: "5–10%", coreAPY: "3–4%",  desc: "CORE deposits restricted",                 color: "text-red-700" },
-  { level: "CRITICAL", threshold: "< 5%",  coreAPY: "2–3%",  desc: "Emergency — all deposits should be paused",color: "text-red-900" },
+  { level: "HEALTHY",  threshold: "≥ 20%",  coreAPY: "4–6%", desc: "All deposits enabled",                      tone: "positive" as const },
+  { level: "CAUTION",  threshold: "15–20%", coreAPY: "4–6%", desc: "All deposits enabled",                      tone: "seam"     as const },
+  { level: "WARNING",  threshold: "10–15%", coreAPY: "4–5%", desc: "Monitoring closely",                        tone: "warning"  as const },
+  { level: "DANGER",   threshold: "5–10%",  coreAPY: "3–4%", desc: "CORE deposits restricted",                  tone: "danger"   as const },
+  { level: "CRITICAL", threshold: "< 5%",   coreAPY: "2–3%", desc: "Emergency — all deposits should be paused", tone: "danger"   as const },
 ];
+
+const TABLE_TONE_VAR: Record<string, string> = {
+  positive: "var(--positive)",
+  seam:     "var(--seam-700)",
+  warning:  "var(--warning)",
+  danger:   "var(--danger)",
+};
 
 function useLastUpdated(dataUpdatedAt: number) {
   const [label, setLabel] = useState("—");
@@ -55,15 +67,14 @@ function useLastUpdated(dataUpdatedAt: number) {
 export default function SafetyPage() {
   const { data, dataUpdatedAt } = useReadContracts({
     contracts: [
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },       // 0
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },       // 1
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },       // 2
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },    // 3
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },    // 4
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "minApexBufferBps" },    // 5
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexBufferGateActive" }, // 6
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "minApexBufferBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexBufferGateActive" },
     ],
-    // Auto-poll every 30 s — safety state should stay fresh without user interaction
     query: { refetchInterval: 30_000 },
   });
 
@@ -81,137 +92,160 @@ export default function SafetyPage() {
 
   const level = getSafetyLevel(apexRatioPct, totalPrincipal);
   const cfg = LEVEL_CONFIG[level];
-
   const lastUpdated = useLastUpdated(dataUpdatedAt);
 
+  const pct = (n: bigint) =>
+    totalPrincipal > 0n ? Number((n * 10000n) / totalPrincipal) / 100 : 0;
+
   return (
-    <div>
-      <div className="flex justify-between items-baseline mb-2">
-        <h1 className="text-2xl font-bold">Safety Monitor</h1>
-        <span className="text-xs text-gray-400">
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "40px 0 60px" }}>
+      {/* Page header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <h1 style={{ font: "var(--fw-bold) 34px/1 var(--font-serif)", color: "var(--text-strong)", letterSpacing: "-0.02em", margin: "0 0 8px" }}>
+            Safety Monitor
+          </h1>
+          <p style={{ font: "400 14px/1 var(--font-sans)", color: "var(--text-muted)", margin: 0 }}>
+            Real-time protocol health and the APEX buffer system.
+          </p>
+        </div>
+        <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>
           Auto-refreshes every 30s · updated {lastUpdated}
         </span>
       </div>
-      <p className="text-sm text-gray-400 mb-6">Real-time protocol health and APEX buffer system</p>
 
-      {/* Current status */}
-      <div className={`border ${cfg.border} ${cfg.bg} p-5 mb-6`}>
-        <div className="flex justify-between items-start">
+      {/* Current status hero */}
+      <Card pad="lg" style={{ background: cfg.toneBg, border: `1px solid ${cfg.toneVar}33` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Current Safety Level</p>
-            <p className={`text-3xl font-bold ${cfg.color}`}>{cfg.label}</p>
-            <p className="text-sm text-gray-500 mt-1">{cfg.desc}</p>
+            <span style={{ font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: "10px" }}>
+              Current Safety Level
+            </span>
+            <div style={{ font: "var(--fw-bold) 42px/1 var(--font-serif)", color: cfg.toneVar, letterSpacing: "-0.02em" }}>
+              {cfg.label}
+            </div>
+            <p style={{ font: "400 14px/1.5 var(--font-sans)", color: "var(--text-body)", marginTop: "8px", maxWidth: "420px" }}>
+              {cfg.desc}
+            </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-400 mb-1">APEX Buffer Ratio</p>
-            <p className={`text-3xl font-bold font-mono ${cfg.color}`}>{totalPrincipal > 0n ? `${apexRatioPct.toFixed(2)}%` : "—"}</p>
-            <p className="text-xs text-gray-400 mt-1">Gate threshold: {minApexPct}%</p>
-          </div>
-        </div>
-
-        {/* Gauge */}
-        <div className="mt-4">
-          <div className="h-2 bg-white/60 w-full">
-            <div
-              className={`h-2 transition-all ${
-                level === "HEALTHY"  ? "bg-green-500" :
-                level === "CAUTION"  ? "bg-yellow-400" :
-                level === "WARNING"  ? "bg-orange-400" :
-                level === "DANGER"   ? "bg-red-400" :
-                level === "CRITICAL" ? "bg-red-700" : "bg-gray-300"
-              }`}
-              style={{ width: `${Math.min(apexRatioPct, 100)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>0%</span><span>5%</span><span>10%</span><span>20%</span><span>100%</span>
+          <div style={{ textAlign: "right" }}>
+            <span style={{ font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: "10px" }}>
+              APEX Buffer Ratio
+            </span>
+            <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "42px", color: cfg.toneVar, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+              {totalPrincipal > 0n ? `${apexRatioPct.toFixed(2)}%` : "—"}
+            </div>
+            <div style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)", marginTop: "6px" }}>
+              Gate threshold: {minApexPct}%
+            </div>
           </div>
         </div>
-      </div>
+        <StrataBar value={Math.min(apexRatioPct, 100)} tone={cfg.tone} height={10} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "7px" }}>
+          {["0%", "5%", "10%", "20%", "100%"].map((t) => (
+            <span key={t} style={{ font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)" }}>{t}</span>
+          ))}
+        </div>
+      </Card>
 
       {/* Deposit status */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <div className="border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 mb-1">CORE APY Target</p>
-          <p className="text-xl font-bold font-mono">
-            {data ? `${(Number(coreMin) / 100).toFixed(1)}–${(Number(coreMax) / 100).toFixed(1)}%` : "—"}
-          </p>
-        </div>
-        <div className={`border p-4 ${!gateActive ? "border-gray-200" : "border-orange-200 bg-orange-50"}`}>
-          <p className="text-xs text-gray-400 mb-1">CORE / SEAM Deposits</p>
-          <p className={`text-sm font-bold ${!gateActive ? "text-green-700" : "text-orange-700"}`}>
-            {!gateActive ? "✓ Enabled" : "⚠ Gated — deposit APEX first"}
-          </p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+        <Card pad="md">
+          <StatTile
+            label="CORE APY Target"
+            value={data ? `${(Number(coreMin) / 100).toFixed(1)}–${(Number(coreMax) / 100).toFixed(1)}%` : "—"}
+            sub="senior guaranteed"
+          />
+        </Card>
+        <Card pad="md" style={{ background: gateActive ? "var(--warning-bg)" : undefined }}>
+          <div style={{ font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "10px" }}>
+            CORE / SEAM Deposits
+          </div>
+          <Badge tone={gateActive ? "warning" : "positive"} dot>
+            {gateActive ? "Gated — deposit APEX first" : "Enabled"}
+          </Badge>
           {gateActive && (
-            <p className="text-xs text-orange-600 mt-1">
+            <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--warning)", marginTop: "10px" }}>
               APEX buffer below {minApexPct}% minimum
             </p>
           )}
-        </div>
-        <div className="border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 mb-1">APEX Deposits</p>
-          <p className="text-sm font-bold text-green-700">✓ Always open</p>
-          <p className="text-xs text-gray-400 mt-1">Replenishes first-loss buffer</p>
-        </div>
+        </Card>
+        <Card pad="md">
+          <div style={{ font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "10px" }}>
+            APEX Deposits
+          </div>
+          <Badge tone="positive" dot>Always open</Badge>
+          <p style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-faint)", marginTop: "10px" }}>
+            Replenishes the first-loss buffer.
+          </p>
+        </Card>
       </div>
 
       {/* Principal breakdown */}
-      <div className="border border-gray-200 p-4 mb-6">
-        <p className="text-sm font-bold mb-3">Principal Breakdown</p>
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="text-xs text-gray-400">CORE</p>
-            <p className="font-mono font-bold">{formatUsdc(corePrincipal)}</p>
-            <p className="text-xs text-gray-400">
-              {totalPrincipal > 0n ? `${(Number((corePrincipal * 10000n) / totalPrincipal) / 100).toFixed(1)}%` : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">SEAM</p>
-            <p className="font-mono font-bold">{formatUsdc(seamPrincipal)}</p>
-            <p className="text-xs text-gray-400">
-              {totalPrincipal > 0n ? `${(Number((seamPrincipal * 10000n) / totalPrincipal) / 100).toFixed(1)}%` : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">APEX (buffer)</p>
-            <p className="font-mono font-bold">{formatUsdc(apexPrincipal)}</p>
-            <p className={`text-xs font-bold ${cfg.color}`}>
-              {totalPrincipal > 0n ? `${apexRatioPct.toFixed(1)}%` : "—"}
-            </p>
-          </div>
+      <Card pad="lg">
+        <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 18px" }}>
+          Principal Breakdown
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px" }}>
+          {([
+            { k: "CORE",          v: corePrincipal,  tone: "core"  as const },
+            { k: "SEAM",          v: seamPrincipal,  tone: "seam"  as const },
+            { k: "APEX (buffer)", v: apexPrincipal,  tone: "apex"  as const },
+          ] as const).map((row) => {
+            const p = pct(row.v);
+            return (
+              <div key={row.k}>
+                <div style={{ font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "7px" }}>
+                  {row.k}
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "20px", color: "var(--text-strong)", marginBottom: "10px", fontVariantNumeric: "tabular-nums" }}>
+                  {formatUsdc(row.v)}
+                </div>
+                <StrataBar value={p} tone={row.tone} valueLabel={`${p.toFixed(1)}%`} height={8} />
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </Card>
 
       {/* Safety level table */}
-      <div className="border border-gray-200">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <p className="text-sm font-bold">Safety Level System</p>
+      <Card pad="none">
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: 0 }}>
+            Safety Level System
+          </h3>
         </div>
-        <table className="w-full text-sm">
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr className="border-b border-gray-100 text-xs text-gray-400">
-              <th className="text-left px-4 py-2">Level</th>
-              <th className="text-left px-4 py-2">APEX Ratio</th>
-              <th className="text-left px-4 py-2">CORE APY</th>
-              <th className="text-left px-4 py-2">Status</th>
+            <tr>
+              {["Level", "APEX Ratio", "CORE APY", "Status"].map((h) => (
+                <th key={h} style={{
+                  textAlign: "left", padding: "10px 22px",
+                  font: "var(--fw-semibold) 10px/1 var(--font-sans)",
+                  letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-faint)",
+                  borderBottom: "1px solid var(--border-soft)",
+                }}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {LEVEL_TABLE.map((row) => (
-              <tr
-                key={row.level}
-                className={`border-b border-gray-100 ${level === row.level ? "bg-gray-50 font-bold" : ""}`}
-              >
-                <td className={`px-4 py-3 ${row.color}`}>{row.level} {level === row.level && "←"}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.threshold}</td>
-                <td className="px-4 py-3 font-mono text-xs">{row.coreAPY}</td>
-                <td className="px-4 py-3 text-xs text-gray-500">{row.desc}</td>
-              </tr>
-            ))}
+            {LEVEL_TABLE.map((row) => {
+              const on = row.level === level;
+              const rc = TABLE_TONE_VAR[row.tone];
+              return (
+                <tr key={row.level} style={{ background: on ? "var(--surface-sunken)" : "transparent" }}>
+                  <td style={{ padding: "14px 22px", font: `${on ? 700 : 600} 13px/1 var(--font-sans)`, color: rc, borderBottom: "1px solid var(--border-soft)" }}>
+                    {row.level}{on && <span style={{ marginLeft: "8px", color: "var(--text-muted)" }}>←</span>}
+                  </td>
+                  <td style={{ padding: "14px 22px", font: "400 12px/1 var(--font-mono)", color: "var(--text-body)", borderBottom: "1px solid var(--border-soft)" }}>{row.threshold}</td>
+                  <td style={{ padding: "14px 22px", font: "400 12px/1 var(--font-mono)", color: "var(--text-body)", borderBottom: "1px solid var(--border-soft)" }}>{row.coreAPY}</td>
+                  <td style={{ padding: "14px 22px", font: "400 12px/1 var(--font-sans)", color: "var(--text-muted)", borderBottom: "1px solid var(--border-soft)" }}>{row.desc}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

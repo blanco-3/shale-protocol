@@ -3,8 +3,12 @@ import { useState, useEffect } from "react";
 import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { VAULT_ADDRESS, VAULT_ABI, ERC20_ABI } from "../../lib/contracts";
 import { TIERS, formatUsdc } from "../../lib/utils";
+import { Card } from "../../components/ui/Card";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { StatTile } from "../../components/ui/StatTile";
 
-const EPOCH_DURATION = 120; // 2-min demo epochs
+const EPOCH_DURATION = 120;
 
 function useEpochCountdown(lastEpochTimestamp: bigint | undefined) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -27,12 +31,18 @@ function formatCountdown(s: number): string {
   return `${m}m ${sec}s`;
 }
 
+const eyebrow: React.CSSProperties = {
+  font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)",
+  letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)",
+};
+
+const TIER_TONES = ["core", "seam", "apex"] as const;
+
 export default function PortfolioPage() {
   const { address, isConnected } = useAccount();
   const { writeContract, isPending, data: txHash } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
-  // Static vault reads — poll every 15s so epoch countdown triggers Settle button
   const { data: staticData, refetch: refetchStatic } = useReadContracts({
     contracts: [
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreToken" },
@@ -57,33 +67,26 @@ export default function PortfolioPage() {
   const secondsLeft = useEpochCountdown(lastEpochTimestamp);
   const epochReady = secondsLeft === 0;
 
-  // User-specific reads:
-  //  [0-2]  share balances per tier
-  //  [3-8]  vault principal + yieldBucket per tier (3 pairs)
-  //  [9-11] totalSupply per tier token (for exchange rate)
   const { data: userData, refetch } = useReadContracts({
     contracts: address && coreTokenAddr && seamTokenAddr && apexTokenAddr ? [
-      { address: coreTokenAddr,  abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
-      { address: seamTokenAddr,  abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
-      { address: apexTokenAddr,  abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
-      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "corePrincipal" },
-      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "coreAccumulatedYield" },
-      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "seamPrincipal" },
-      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "seamAccumulatedYield" },
-      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "apexPrincipal" },
-      { address: VAULT_ADDRESS,  abi: VAULT_ABI, functionName: "apexAccumulatedYield" },
-      { address: coreTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
-      { address: seamTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
-      { address: apexTokenAddr,  abi: ERC20_ABI, functionName: "totalSupply" },
+      { address: coreTokenAddr, abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
+      { address: seamTokenAddr, abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
+      { address: apexTokenAddr, abi: ERC20_ABI, functionName: "balanceOf",   args: [address] },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreAccumulatedYield" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamAccumulatedYield" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexAccumulatedYield" },
+      { address: coreTokenAddr, abi: ERC20_ABI, functionName: "totalSupply" },
+      { address: seamTokenAddr, abi: ERC20_ABI, functionName: "totalSupply" },
+      { address: apexTokenAddr, abi: ERC20_ABI, functionName: "totalSupply" },
     ] : [],
     query: { enabled: !!address && !!coreTokenAddr, refetchInterval: 15_000 },
   });
 
   useEffect(() => {
-    if (isSuccess) {
-      refetch();
-      refetchStatic();
-    }
+    if (isSuccess) { refetch(); refetchStatic(); }
   }, [isSuccess, refetch, refetchStatic]);
 
   const g = (i: number): bigint | undefined =>
@@ -91,11 +94,9 @@ export default function PortfolioPage() {
 
   const shareBalances = [g(0), g(1), g(2)];
 
-  // Exchange rate per tier: currentValue = shares * (principal + yieldBucket) / totalSupply
-  // This mirrors previewRedeem() in the contract exactly.
   const currentValues = [0, 1, 2].map(i => {
-    const shares     = shareBalances[i];
-    const principal  = g(3 + i * 2);
+    const shares = shareBalances[i];
+    const principal = g(3 + i * 2);
     const yieldBucket = g(4 + i * 2);
     const totalSupply = g(9 + i);
     if (shares === undefined) return undefined;
@@ -104,16 +105,14 @@ export default function PortfolioPage() {
     return (shares * (principal + yieldBucket)) / totalSupply;
   });
 
-  // Yield = currentValue − original deposit (shares were minted 1:1 at deposit)
   const yieldEarned = [0, 1, 2].map(i => {
     const shares = shareBalances[i];
-    const cv     = currentValues[i];
+    const cv = currentValues[i];
     if (shares === undefined || cv === undefined) return undefined;
     return cv > shares ? cv - shares : 0n;
   });
 
   const busy = isPending || isConfirming;
-
   const GAS = { maxFeePerGas: 500_000_000n, maxPriorityFeePerGas: 1_000_000n } as const;
 
   function handleRequestWithdraw(tierId: number, shares: bigint) {
@@ -129,115 +128,124 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Portfolio</h1>
-
-      {/* Epoch panel */}
-      <div className="border border-gray-200 p-4 mb-6 text-sm">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <span className="text-gray-500">Epoch #{epochCount !== undefined ? epochCount.toString() : "—"}</span>
-            <span className={epochReady ? "text-green-600 font-bold" : "text-gray-700 font-mono"}>
-              {secondsLeft !== null ? formatCountdown(secondsLeft) : "—"}
-            </span>
-            {queueLength > 0 && (
-              <span className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5">
-                {queueLength} queued
-              </span>
-            )}
-            {pendingPenalties > 0n && (
-              <span className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5">
-                {formatUsdc(pendingPenalties)} penalties pending
-              </span>
-            )}
-          </div>
-          <button
-            onClick={handleSettleEpoch}
-            disabled={busy || !epochReady}
-            className="text-xs border border-gray-300 px-3 py-1 hover:border-black disabled:opacity-40 transition-colors"
-          >
-            {busy ? "Settling..." : "Settle Epoch"}
-          </button>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "40px 0 60px" }}>
+      <div>
+        <h1 style={{ font: "var(--fw-bold) 34px/1 var(--font-serif)", color: "var(--text-strong)", letterSpacing: "-0.02em", margin: "0 0 8px" }}>
+          Portfolio
+        </h1>
+        <p style={{ font: "400 14px/1 var(--font-sans)", color: "var(--text-muted)", margin: 0 }}>
+          Your positions across CORE, SEAM, and APEX tiers.
+        </p>
       </div>
 
+      {/* Epoch panel */}
+      <Card pad="md">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <StatTile label="Epoch" value={epochCount !== undefined ? `#${epochCount.toString()}` : "—"} />
+            <div style={{ width: "1px", height: "36px", background: "var(--border)" }} />
+            <div>
+              <div style={{ ...eyebrow, marginBottom: "5px" }}>Next Settle</div>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "16px",
+                color: epochReady ? "var(--positive)" : "var(--text-strong)",
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {secondsLeft !== null ? formatCountdown(secondsLeft) : "—"}
+              </span>
+            </div>
+            {queueLength > 0 && <Badge tone="warning" mono>{queueLength} queued</Badge>}
+            {pendingPenalties > 0n && <Badge tone="neutral" mono>{formatUsdc(pendingPenalties)} penalties</Badge>}
+          </div>
+          <Button size="sm" variant="outline" disabled={busy || !epochReady} onClick={handleSettleEpoch}>
+            {busy ? "Settling…" : "Settle Epoch"}
+          </Button>
+        </div>
+      </Card>
+
       {!isConnected ? (
-        <p className="text-sm text-gray-400">Connect wallet to view portfolio.</p>
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: "13px", color: "var(--text-muted)" }}>
+          Connect wallet to view portfolio.
+        </p>
       ) : (
         <>
-          {isSuccess && <p className="text-sm text-green-600 mb-4">Transaction confirmed.</p>}
+          {isSuccess && (
+            <p style={{ fontFamily: "var(--font-sans)", fontSize: "13px", color: "var(--positive)" }}>
+              Transaction confirmed.
+            </p>
+          )}
 
-          <table className="w-full text-sm border-collapse mb-4">
-            <thead>
-              <tr className="border-b border-gray-200 text-xs text-gray-500">
-                <th className="text-left py-2">Tier</th>
-                <th className="text-right py-2">Shares</th>
-                <th className="text-right py-2">Current Value</th>
-                <th className="text-right py-2">Yield</th>
-                <th className="text-right py-2 w-40">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TIERS.map((tier, i) => {
-                const shares = shareBalances[i];
-                const cv     = currentValues[i];
-                const noPosition = shares !== undefined && shares === 0n;
+          <Card pad="none">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  {["Tier", "Shares", "Current Value", "Yield", "Action"].map((h, i) => (
+                    <th key={h} style={{
+                      textAlign: i === 0 ? "left" : i === 4 ? "right" : "right",
+                      padding: "12px 22px",
+                      font: "var(--fw-semibold) 10px/1 var(--font-sans)",
+                      letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-faint)",
+                      ...(i === 4 ? { width: "180px" } : {}),
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {TIERS.map((tier, i) => {
+                  const shares = shareBalances[i];
+                  const cv = currentValues[i];
+                  const noPosition = shares !== undefined && shares === 0n;
+                  const tone = TIER_TONES[i];
 
-                return (
-                  <tr key={tier.id} className={`border-b border-gray-100 ${noPosition ? "opacity-40" : ""}`}>
-                    <td className="py-3">
-                      <span className="font-bold">{tier.name}</span>
-                      <span className="text-xs text-gray-400 ml-2">{tier.label}</span>
-                    </td>
-                    <td className="py-3 text-right font-mono text-xs">
-                      {shares !== undefined ? (Number(shares) / 1e6).toFixed(2) : "—"}
-                    </td>
-                    <td className="py-3 text-right font-mono">
-                      {cv !== undefined ? formatUsdc(cv) : "—"}
-                    </td>
-                    <td className="py-3 text-right font-mono text-green-700 text-xs">
-                      {yieldEarned[i] !== undefined && yieldEarned[i]! > 0n
-                        ? "+" + formatUsdc(yieldEarned[i]!)
-                        : "—"}
-                    </td>
-                    <td className="py-3 text-right">
-                      {!noPosition && shares && shares > 0n && (
-                        <div className="flex gap-1 justify-end">
-                          <button
-                            onClick={() => handleRequestWithdraw(tier.id, shares)}
-                            disabled={busy}
-                            title="Queue for next epoch (no penalty)"
-                            className="text-xs border border-gray-300 px-2 py-1 hover:border-black disabled:opacity-40 transition-colors"
-                          >
-                            Queue
-                          </button>
-                          <button
-                            onClick={() => handleEarlyWithdraw(tier.id, shares)}
-                            disabled={busy}
-                            title="Withdraw now with 1% penalty"
-                            className="text-xs border border-red-200 text-red-600 px-2 py-1 hover:border-red-400 disabled:opacity-40 transition-colors"
-                          >
-                            Early (−1%)
-                          </button>
+                  return (
+                    <tr key={tier.id} style={{ borderBottom: "1px solid var(--border-soft)", opacity: noPosition ? 0.4 : 1 }}>
+                      <td style={{ padding: "16px 22px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <Badge tone={tone}>{tier.name}</Badge>
+                          <span style={{ fontFamily: "var(--font-sans)", fontSize: "12px", color: "var(--text-faint)" }}>{tier.label}</span>
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td style={{ padding: "16px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--text-body)", fontVariantNumeric: "tabular-nums" }}>
+                        {shares !== undefined ? (Number(shares) / 1e6).toFixed(2) : "—"}
+                      </td>
+                      <td style={{ padding: "16px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 600, color: "var(--text-strong)", fontVariantNumeric: "tabular-nums" }}>
+                        {cv !== undefined ? formatUsdc(cv) : "—"}
+                      </td>
+                      <td style={{ padding: "16px 22px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>
+                        {yieldEarned[i] !== undefined && yieldEarned[i]! > 0n
+                          ? "+" + formatUsdc(yieldEarned[i]!)
+                          : "—"}
+                      </td>
+                      <td style={{ padding: "16px 22px", textAlign: "right" }}>
+                        {!noPosition && shares && shares > 0n && (
+                          <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+                            <Button size="sm" variant="outline" disabled={busy} onClick={() => handleRequestWithdraw(tier.id, shares)} title="Queue for next epoch (no penalty)">
+                              Queue
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={busy} onClick={() => handleEarlyWithdraw(tier.id, shares)} title="Withdraw now with 1% penalty" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+                              Early (−1%)
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
 
-          {/* Exchange rate note */}
-          <p className="text-xs text-gray-400 mb-2">
-            <span className="font-medium">Current Value</span> reflects the live exchange rate:{" "}
-            <span className="font-mono">shares × (principal + yield) / totalSupply</span>.
-            Yield is distributed at each epoch settlement.
-          </p>
-          <p className="text-xs text-gray-400">
-            <span className="font-medium">Queue</span> — processed at epoch settlement, no penalty. &nbsp;
-            <span className="font-medium text-red-500">Early</span> — immediate, 1% penalty redistributed to remaining depositors.
-          </p>
+          <Card surface="sunken" pad="md">
+            <p style={{ font: "400 12px/1.5 var(--font-sans)", color: "var(--text-muted)", margin: "0 0 4px" }}>
+              <strong>Current Value</strong> reflects the live exchange rate:{" "}
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px" }}>shares × (principal + yield) / totalSupply</span>.
+              Yield is distributed at each epoch settlement.
+            </p>
+            <p style={{ font: "400 12px/1.5 var(--font-sans)", color: "var(--text-muted)", margin: 0 }}>
+              <strong>Queue</strong> — processed at epoch settlement, no penalty. &nbsp;
+              <strong style={{ color: "var(--danger)" }}>Early</strong> — immediate, 1% penalty redistributed to remaining depositors.
+            </p>
+          </Card>
         </>
       )}
     </div>

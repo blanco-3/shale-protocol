@@ -11,30 +11,37 @@ import {
 import { formatUsdc, TIERS, bpsToPercent } from "../lib/utils";
 import { TierCard } from "../components/TierCard";
 import { AgentPanel } from "../components/AgentPanel";
+import { Card } from "../components/ui/Card";
+import { StatTile } from "../components/ui/StatTile";
+import { Button } from "../components/ui/Button";
+
+const eyebrow: React.CSSProperties = {
+  font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)",
+  letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)",
+};
 
 export default function Dashboard() {
   const { data: vaultData } = useReadContracts({
     contracts: [
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },           // 0
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },           // 1
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },           // 2
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },        // 3
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },        // 4
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },        // 5
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },        // 6
-      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "epochCount" },              // 7
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "corePrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamPrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "apexPrincipal" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMinBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "coreTargetMaxBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "epochCount" },
     ],
   });
 
-  // Live sim-strategy APY reads + router weights
   const { data: stratData } = useReadContracts({
     contracts: [
-      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "apyBps" },   // 0
-      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps" },   // 1
-      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps" },   // 2
-      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [0n] }, // 3 Aave weight
-      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [1n] }, // 4 Camelot weight
-      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [2n] }, // 5 Morpho weight
+      { address: AAVE_STRATEGY_ADDRESS,    abi: SIM_AAVE_ABI,    functionName: "apyBps" },
+      { address: CAMELOT_STRATEGY_ADDRESS, abi: SIM_CAMELOT_ABI, functionName: "apyBps" },
+      { address: MORPHO_STRATEGY_ADDRESS,  abi: SIM_MORPHO_ABI,  functionName: "apyBps" },
+      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [0n] },
+      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [1n] },
+      { address: STRATEGY_ROUTER_ADDRESS,  abi: STRATEGY_ROUTER_ABI, functionName: "getStrategy", args: [2n] },
     ],
   });
 
@@ -47,137 +54,99 @@ export default function Dashboard() {
   const loading = vaultData === undefined;
 
   const s = (i: number) => stratData?.[i]?.status === "success" ? Number(stratData[i].result as bigint) : null;
-  const aaveApyBps    = s(0);
-  const camelotApyBps = s(1);
-  const morphoApyBps  = s(2);
+  const aaveApyBps = s(0), camelotApyBps = s(1), morphoApyBps = s(2);
 
   const getWeight = (i: number) => stratData?.[i]?.status === "success"
     ? Number((stratData[i].result as readonly [string, number, string, boolean, bigint])[1])
     : null;
-  const aaveWeight    = getWeight(3);
-  const camelotWeight = getWeight(4);
-  const morphoWeight  = getWeight(5);
+  const aaveWeight = getWeight(3), camelotWeight = getWeight(4), morphoWeight = getWeight(5);
 
-  // Blended APY = weighted average of 3 sim strategies (weights sum to 10000)
   const blendedConservativeBps = (aaveApyBps !== null && camelotApyBps !== null && morphoApyBps !== null
     && aaveWeight !== null && camelotWeight !== null && morphoWeight !== null)
     ? Math.round((aaveApyBps * aaveWeight + camelotApyBps * camelotWeight + morphoApyBps * morphoWeight) / 10_000)
-    : 850; // fallback ~8.5%
-  const blendedOptimisticBps = camelotApyBps ?? 1095; // Camelot alone as ceiling
-  const aaveRateBps = aaveApyBps; // kept for display compat
+    : 850;
+  const blendedOptimisticBps = camelotApyBps ?? 1095;
 
-  // Realized APY is intentionally not computed here.
-  // The strategies accrue yield based on actual wall-clock time, not epoch count,
-  // so a simple (yieldBucket / principal / epochCount) × epochsPerYear formula
-  // produces inflated numbers when epochs are settled after large time gaps (e.g.
-  // initial vault setup). Projected APY from live strategy rates is shown instead.
-  const coreRealized  = null;
-  const seamRealized  = null;
-  const apexRealized  = null;
+  const coreRealized = null, seamRealized = null, apexRealized = null;
 
-  // APEX projected APY range
-  // Formula: (strategyYield × total - coreDue_annual - seamDue_annual) / apexPrincipal
-  // Shows two scenarios: conservative (4% blended) and optimistic (7% blended)
   function projectApexAPY(strategyBps: number): string | null {
     if (apexPrincipal === 0n || totalTVL === 0n) return null;
-    const total = Number(totalTVL);
-    const apex  = Number(apexPrincipal);
+    const total = Number(totalTVL), apex = Number(apexPrincipal);
     const stratYield = total * strategyBps / 10_000;
-    const coreDue    = Number(corePrincipal) * Number(coreMin) / 10_000;
-    const seamDue    = Number(seamPrincipal) * Number(seamMin) / 10_000;
-    const apexYield  = Math.max(0, stratYield - coreDue - seamDue);
+    const coreDue = Number(corePrincipal) * Number(coreMin) / 10_000;
+    const seamDue = Number(seamPrincipal) * Number(seamMin) / 10_000;
+    const apexYield = Math.max(0, stratYield - coreDue - seamDue);
     return (apexYield / apex * 100).toFixed(1) + "%";
   }
 
-  // Blended strategy APY: weighted live rates from Aave + FixedYield (falls back to ~4.2% / 7%)
   const apexConservative = projectApexAPY(blendedConservativeBps);
   const apexOptimistic   = projectApexAPY(blendedOptimisticBps);
   const apexLeverage     = apexPrincipal > 0n && totalTVL > 0n
-    ? (Number(totalTVL) / Number(apexPrincipal)).toFixed(1)
+    ? (Number(totalTVL) / Number(apexPrincipal)).toFixed(1) + "×"
     : null;
 
+  const apexBufferPct = totalTVL > 0n
+    ? (Number((apexPrincipal * 10000n) / totalTVL) / 100).toFixed(1)
+    : "—";
+
+  const blendedDisplay = `${(blendedConservativeBps / 100).toFixed(1)}–${(blendedOptimisticBps / 100).toFixed(1)}%`;
+
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", paddingBottom: "48px" }}>
       {/* Hero */}
-      <div className="border border-gray-200 p-6 mb-8">
-        <div className="max-w-2xl">
-          <h1 className="text-3xl font-bold mb-2 tracking-tight">AI-Managed Yield Vault</h1>
-          <p className="text-gray-500 text-sm leading-relaxed mb-4">
+      <div className="shale-strata" style={{
+        borderRadius: "var(--r-lg)", padding: "40px 44px", marginBottom: "4px",
+        border: "1px solid var(--border-soft)",
+      }}>
+        <div style={{ maxWidth: "560px" }}>
+          <h1 style={{ font: "var(--fw-bold) 38px/1.1 var(--font-serif)", color: "var(--sand-50)", letterSpacing: "-0.02em", margin: "0 0 14px" }}>
+            AI-Managed Yield Vault
+          </h1>
+          <p style={{ font: "400 15px/1.6 var(--font-sans)", color: "rgba(249,244,234,0.72)", margin: "0 0 22px" }}>
             SHALE splits your deposit across three risk tiers — CORE, SEAM, and APEX — each earning
             different rates based on loss-absorption priority. An on-chain AI agent continuously
             rebalances across DeFi strategies and adjusts APY targets via governance proposals.
           </p>
-          <div className="flex gap-6 text-xs text-gray-400 font-mono border-t border-gray-100 pt-4">
-            <span><span className="text-green-700 font-bold">CORE</span> · protected APY · last loss</span>
-            <span><span className="text-yellow-700 font-bold">SEAM</span> · higher APY · mid loss</span>
-            <span><span className="text-red-700 font-bold">APEX</span> · leveraged APY · first loss</span>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Link href="/deposit" style={{ textDecoration: "none" }}>
+              <Button tone="accent" size="md">Start Earning →</Button>
+            </Link>
+            <Link href="/analytics" style={{ textDecoration: "none" }}>
+              <Button variant="outline" tone="accent" size="md">View Analytics</Button>
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Protocol stats bar — 5 columns */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8 text-sm">
-
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs text-gray-400 mb-1">Total TVL</p>
-          <p className="text-xl font-bold font-mono">{loading ? "—" : formatUsdc(totalTVL)}</p>
-        </div>
-
-        {/* CORE */}
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs text-gray-400 mb-0.5">CORE APY</p>
-          <p className="text-xs text-gray-400 mb-1">target</p>
-          <p className="text-xl font-bold font-mono">
-            {bpsToPercent(coreMin)} – {bpsToPercent(coreMax)}
-          </p>
-          {coreRealized && (
-            <p className="text-xs text-green-600 mt-1">realized {coreRealized}</p>
-          )}
-        </div>
-
-        {/* SEAM */}
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs text-gray-400 mb-0.5">SEAM APY</p>
-          <p className="text-xs text-gray-400 mb-1">target</p>
-          <p className="text-xl font-bold font-mono">
-            {bpsToPercent(seamMin)} – {bpsToPercent(seamMax)}
-          </p>
-          {seamRealized && (
-            <p className="text-xs text-green-600 mt-1">realized {seamRealized}</p>
-          )}
-        </div>
-
-        {/* APEX — projected leveraged yield */}
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs text-gray-400 mb-0.5">APEX APY</p>
-          <p className="text-xs text-gray-400 mb-1">
-            {apexLeverage ? `${apexLeverage}× leverage` : "leveraged"}
-          </p>
-          <p className="text-xl font-bold font-mono">
-            {apexRealized
+      {/* Stats bar */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
+        <Card pad="md">
+          <StatTile label="Total TVL" value={loading ? "—" : formatUsdc(totalTVL)} sub="principal" />
+        </Card>
+        <Card pad="md">
+          <StatTile label="CORE APY" value={`${bpsToPercent(coreMin)}–${bpsToPercent(coreMax)}`} sub="target" />
+        </Card>
+        <Card pad="md">
+          <StatTile label="SEAM APY" value={`${bpsToPercent(seamMin)}–${bpsToPercent(seamMax)}`} sub="target" />
+        </Card>
+        <Card pad="md">
+          <StatTile
+            label="APEX APY"
+            value={apexRealized
               ? apexRealized
               : apexConservative && apexOptimistic
               ? `${apexConservative}–${apexOptimistic}`
               : "—"}
-          </p>
-          {apexRealized
-            ? <p className="text-xs text-green-600 mt-1">realized</p>
-            : apexConservative
-            ? <p className="text-xs text-gray-400 mt-1">{aaveRateBps !== null ? "live est." : "est."} at {(blendedConservativeBps/100).toFixed(1)}–{(blendedOptimisticBps/100).toFixed(1)}% strategy</p>
-            : null}
-        </div>
-
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs text-gray-400 mb-1">Epoch</p>
-          <p className="text-xl font-bold font-mono">
-            #{loading ? "—" : epochCount.toString()}
-          </p>
-        </div>
-
+            sub={apexLeverage ? `${apexLeverage} leverage` : "leveraged"}
+          />
+        </Card>
+        <Card pad="md">
+          <StatTile label="Epoch" value={loading ? "—" : `#${epochCount.toString()}`} sub="settled" />
+        </Card>
       </div>
 
       {/* Tier cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
         <TierCard tier={TIERS[0]} tvl={corePrincipal} apyMin={coreMin} apyMax={coreMax} />
         <TierCard tier={TIERS[1]} tvl={seamPrincipal} apyMin={seamMin} apyMax={seamMax} />
         <TierCard
@@ -196,102 +165,71 @@ export default function Dashboard() {
       </div>
 
       {/* Risk–Yield Tradeoff */}
-      <div className="border border-gray-200 mb-8">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <p className="text-sm font-bold">Risk–Yield Tradeoff</p>
-          <p className="text-xs text-gray-400 mt-0.5">Loss absorption order — who gets hurt first if strategy underperforms</p>
+      <Card pad="lg">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
+          <h3 style={{ font: "var(--fw-semibold) 18px/1 var(--font-serif)", color: "var(--text-strong)", margin: 0 }}>
+            Risk–Yield Tradeoff
+          </h3>
+          <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-faint)" }}>loss absorption order</span>
         </div>
+        <p style={{ font: "400 13px/1.5 var(--font-sans)", color: "var(--text-muted)", margin: "0 0 18px" }}>
+          Who absorbs the hit first if a strategy underperforms.
+        </p>
 
-        {/* Loss cascade visual */}
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex text-xs gap-1">
-            <div className="flex-1 border border-red-200 bg-red-50 p-3 text-center">
-              <p className="font-bold text-red-700">① APEX</p>
-              <p className="text-red-500 mt-1">First-loss</p>
-              <p className="text-gray-500 mt-1">High APY, principal at risk</p>
+        <div style={{ display: "flex", alignItems: "stretch", gap: "8px", marginBottom: "16px" }}>
+          {([
+            { name: "① APEX", note: "First-loss",  sub: "High APY · principal at risk",   bg: "var(--apex-50)",  tone: "var(--apex-500)" },
+            { name: "② SEAM", note: "Second-loss", sub: "Mid APY · partial buffer",        bg: "var(--seam-50)", tone: "var(--seam-500)" },
+            { name: "③ CORE", note: "Last-loss",   sub: "Safe APY · principal protected",  bg: "var(--core-50)", tone: "var(--core-500)" },
+          ] as const).map((step, i) => (
+            <div key={step.name} style={{ display: "flex", alignItems: "stretch", flex: 1, gap: "8px" }}>
+              <div style={{
+                flex: 1, background: step.bg, borderRadius: "var(--r-md)",
+                padding: "16px 14px", textAlign: "center",
+                border: `1px solid ${step.tone}22`,
+              }}>
+                <div style={{ font: "var(--fw-bold) 15px/1 var(--font-sans)", color: step.tone, letterSpacing: "0.02em" }}>{step.name}</div>
+                <div style={{ font: "var(--fw-semibold) 12px/1 var(--font-sans)", color: step.tone, marginTop: "8px", opacity: 0.85 }}>{step.note}</div>
+                <div style={{ font: "400 11px/1.4 var(--font-sans)", color: "var(--text-muted)", marginTop: "8px" }}>{step.sub}</div>
+              </div>
+              {i < 2 && <div style={{ display: "flex", alignItems: "center", color: "var(--text-faint)", fontSize: "16px" }}>▶</div>}
             </div>
-            <div className="flex items-center text-gray-300 px-1">▶</div>
-            <div className="flex-1 border border-yellow-200 bg-yellow-50 p-3 text-center">
-              <p className="font-bold text-yellow-700">② SEAM</p>
-              <p className="text-yellow-600 mt-1">Second-loss</p>
-              <p className="text-gray-500 mt-1">Mid APY, partial buffer</p>
-            </div>
-            <div className="flex items-center text-gray-300 px-1">▶</div>
-            <div className="flex-1 border border-green-200 bg-green-50 p-3 text-center">
-              <p className="font-bold text-green-700">③ CORE</p>
-              <p className="text-green-600 mt-1">Last-loss</p>
-              <p className="text-gray-500 mt-1">Safe APY, principal protected</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-400 mt-3">
-            Example: strategy returns $900 on $1,000 TVL (−$100 loss). APEX absorbs first — if APEX principal covers it, CORE and SEAM are unaffected. APEX earns more precisely because it takes on this risk.
-          </p>
+          ))}
         </div>
 
         {/* Comparison table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-100 text-gray-400">
-                <th className="text-left px-4 py-2"></th>
-                <th className="text-center px-3 py-2 text-green-700 font-bold">CORE</th>
-                <th className="text-center px-3 py-2 text-yellow-700 font-bold">SEAM</th>
-                <th className="text-center px-3 py-2 text-red-700 font-bold">APEX</th>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--border-soft)" }}>
+              <th style={{ textAlign: "left", padding: "8px 0", ...eyebrow }}></th>
+              {(["CORE", "SEAM", "APEX"] as const).map((t, i) => (
+                <th key={t} style={{ textAlign: "center", padding: "8px 12px", fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "12px", letterSpacing: "0.06em", color: ["var(--core-600)", "var(--seam-600)", "var(--apex-600)"][i] }}>
+                  {t}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody style={{ fontFamily: "var(--font-mono)" }}>
+            {[
+              { label: "Target APY",    values: [loading ? "—" : `${bpsToPercent(coreMin)}–${bpsToPercent(coreMax)}`, loading ? "—" : `${bpsToPercent(seamMin)}–${bpsToPercent(seamMax)}`, apexConservative && apexOptimistic ? `${apexConservative}–${apexOptimistic}` : "Leveraged"] },
+              { label: "APY floor",     values: ["Guaranteed ✓", "Guaranteed ✓", "None — variable"] },
+              { label: "Principal risk",values: ["Protected",    "Partially",    "At risk"] },
+              { label: "Loss priority", values: ["③ Last",       "② Second",     "① First"] },
+              { label: "Best for",      values: ["Safety first", "Balanced",     "Max yield"] },
+            ].map((row) => (
+              <tr key={row.label} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                <td style={{ padding: "10px 0", fontFamily: "var(--font-sans)", color: "var(--text-muted)", fontSize: "12px" }}>{row.label}</td>
+                {row.values.map((v, i) => (
+                  <td key={i} style={{ padding: "10px 12px", textAlign: "center", color: ["var(--core-600)", "var(--seam-600)", "var(--apex-600)"][i], fontSize: "12px", fontVariantNumeric: "tabular-nums" }}>{v}</td>
+                ))}
               </tr>
-            </thead>
-            <tbody className="font-mono">
-              <tr className="border-b border-gray-50">
-                <td className="px-4 py-2 text-gray-500 font-sans">Target APY</td>
-                <td className="px-3 py-2 text-center">{loading ? "—" : `${bpsToPercent(coreMin)}–${bpsToPercent(coreMax)}`}</td>
-                <td className="px-3 py-2 text-center">{loading ? "—" : `${bpsToPercent(seamMin)}–${bpsToPercent(seamMax)}`}</td>
-                <td className="px-3 py-2 text-center text-gray-500">
-                  {apexConservative && apexOptimistic ? `${apexConservative}–${apexOptimistic}` : "Leveraged"}
-                </td>
-              </tr>
-              <tr className="border-b border-gray-50">
-                <td className="px-4 py-2 text-gray-500 font-sans">APY floor</td>
-                <td className="px-3 py-2 text-center text-green-700">Guaranteed ✓</td>
-                <td className="px-3 py-2 text-center text-yellow-700">Guaranteed ✓</td>
-                <td className="px-3 py-2 text-center text-red-600">None — variable</td>
-              </tr>
-              <tr className="border-b border-gray-50">
-                <td className="px-4 py-2 text-gray-500 font-sans">Principal risk</td>
-                <td className="px-3 py-2 text-center text-green-700">Protected</td>
-                <td className="px-3 py-2 text-center text-yellow-700">Partially</td>
-                <td className="px-3 py-2 text-center text-red-600">At risk</td>
-              </tr>
-              <tr className="border-b border-gray-50">
-                <td className="px-4 py-2 text-gray-500 font-sans">Loss priority</td>
-                <td className="px-3 py-2 text-center text-green-700">③ Last</td>
-                <td className="px-3 py-2 text-center text-yellow-700">② Second</td>
-                <td className="px-3 py-2 text-center text-red-600">① First</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-2 text-gray-500 font-sans">Best for</td>
-                <td className="px-3 py-2 text-center text-gray-600 font-sans">Safety first</td>
-                <td className="px-3 py-2 text-center text-gray-600 font-sans">Balanced</td>
-                <td className="px-3 py-2 text-center text-gray-600 font-sans">Max yield</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+            ))}
+          </tbody>
+        </table>
+      </Card>
 
       {/* Agent panel */}
       <AgentPanel />
-
-      {/* CTA row */}
-      <div className="flex gap-3 mt-6">
-        <Link href="/deposit" className="border border-black px-5 py-2 text-sm hover:bg-black hover:text-white transition-colors">
-          Start Earning →
-        </Link>
-        <Link href="/analytics" className="border border-gray-300 px-5 py-2 text-sm hover:border-black transition-colors">
-          View Analytics
-        </Link>
-        <Link href="/safety" className="border border-gray-300 px-5 py-2 text-sm hover:border-black transition-colors">
-          Safety Monitor
-        </Link>
-      </div>
     </div>
   );
 }

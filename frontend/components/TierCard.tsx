@@ -1,4 +1,10 @@
 import { bpsToPercent, formatUsdc } from "../lib/utils";
+import { Card } from "./ui/Card";
+import { Badge } from "./ui/Badge";
+import { RiskMeter } from "./ui/RiskMeter";
+import { StatTile } from "./ui/StatTile";
+
+type Accent = "core" | "seam" | "apex";
 
 interface Props {
   tier: {
@@ -14,67 +20,75 @@ interface Props {
   apyLabel?: string;
 }
 
-const RISK_DOTS: Record<number, string[]> = {
-  1: ["bg-green-500", "bg-gray-200", "bg-gray-200"],
-  2: ["bg-yellow-400", "bg-yellow-400", "bg-gray-200"],
-  3: ["bg-red-500",   "bg-red-500",   "bg-red-500"  ],
+const TIER_ACCENT: Record<string, Accent> = {
+  CORE: "core",
+  SEAM: "seam",
+  APEX: "apex",
 };
 
-const RISK_LABEL: Record<number, string> = {
-  1: "Low Risk",
-  2: "Med Risk",
-  3: "High Risk",
+const TIER_TONE: Record<string, "core" | "seam" | "apex"> = {
+  CORE: "core",
+  SEAM: "seam",
+  APEX: "apex",
 };
 
 export function TierCard({ tier, tvl, apyMin, apyMax, apyLabel }: Props) {
-  const dots = tier.riskLevel ? RISK_DOTS[tier.riskLevel] : null;
+  const accent = TIER_ACCENT[tier.name] ?? "core";
+  const tone = TIER_TONE[tier.name] ?? "core";
+
+  const apyValue =
+    apyLabel ??
+    (apyMin !== undefined && apyMax !== undefined
+      ? `${bpsToPercent(apyMin)} – ${bpsToPercent(apyMax)}`
+      : "—");
+
   return (
-    <div className="border border-gray-200 p-4 flex flex-col">
+    <Card accent={accent} strataEdge style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Header */}
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-xs text-gray-400 uppercase">{tier.label}</span>
-        <span className="text-lg font-bold">{tier.name}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <Badge tone={tone}>{tier.label}</Badge>
+          <span style={{
+            fontFamily: "var(--font-serif)", fontWeight: 700, fontSize: "22px",
+            letterSpacing: "-0.01em", color: "var(--text-strong)", lineHeight: 1,
+          }}>{tier.name}</span>
+        </div>
+        {tier.riskLevel && (
+          <RiskMeter level={tier.riskLevel} showLabel={false} dotSize={10} />
+        )}
       </div>
 
-      {/* Risk indicator */}
-      {dots && tier.riskLevel && (
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex gap-1">
-            {dots.map((c, i) => <div key={i} className={`w-2 h-2 rounded-full ${c}`} />)}
-          </div>
-          <span className={`text-xs font-medium ${tier.riskColor ?? "text-gray-500"}`}>
-            {RISK_LABEL[tier.riskLevel]}
-          </span>
+      {/* Risk row */}
+      {tier.riskLevel && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <RiskMeter level={tier.riskLevel} />
           {tier.lossPosition && (
-            <span className="text-xs text-gray-400 ml-auto font-mono">{tier.lossPosition}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-faint)" }}>
+              {tier.lossPosition}
+            </span>
           )}
         </div>
       )}
 
-      {/* APY */}
-      <div className="mb-3">
-        <p className="text-xs text-gray-500">Target APY</p>
-        <p className="text-xl font-mono">
-          {apyLabel ??
-            (apyMin !== undefined && apyMax !== undefined
-              ? `${bpsToPercent(apyMin)} – ${bpsToPercent(apyMax)}`
-              : "—")}
-        </p>
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <StatTile label="Target APY" value={apyValue} />
+        <StatTile label="TVL" value={formatUsdc(tvl)} />
       </div>
 
-      {/* TVL */}
-      <div className="mb-3">
-        <p className="text-xs text-gray-500">TVL</p>
-        <p className="font-mono">{formatUsdc(tvl)}</p>
-      </div>
-
-      <p className="text-xs text-gray-400 leading-relaxed flex-1">{tier.description}</p>
+      {/* Description */}
+      <p style={{ font: "400 var(--text-sm)/1.5 var(--font-sans)", color: "var(--text-muted)", flex: 1, margin: 0 }}>
+        {tier.description}
+      </p>
 
       {tier.profile && (
-        <p className={`text-xs font-semibold mt-3 ${tier.riskColor ?? "text-gray-600"}`}>
+        <p style={{
+          fontFamily: "var(--font-sans)", fontWeight: 600, fontSize: "12px",
+          color: `var(--${tone}-600)`, margin: 0,
+        }}>
           → {tier.profile}
         </p>
       )}
-    </div>
+    </Card>
   );
 }

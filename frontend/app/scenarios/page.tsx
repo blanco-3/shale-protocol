@@ -1,234 +1,149 @@
 "use client";
 import { useState } from "react";
+import { Card } from "../../components/ui/Card";
+import { StrataBar } from "../../components/ui/StrataBar";
 
-// ── Pool setup (matches live vault — Arbitrum Sepolia demo) ──────────────────
+// ── Pool setup ─────────────────────────────────────────────────────────────────
 const TOTAL_TVL  = 750_000;
-const CORE_TVL   = 375_000;  // 50%
-const SEAM_TVL   = 200_000;  // 26.7%
-const APEX_TVL   = 175_000;  // 23.3%
-const CORE_TARGET_PCT = 2.5;  // guaranteed min APY
-const SEAM_TARGET_PCT = 5.0;  // guaranteed min APY
+const CORE_TVL   = 375_000;
+const SEAM_TVL   = 200_000;
+const APEX_TVL   = 175_000;
+const CORE_TARGET_PCT = 2.5;
+const SEAM_TARGET_PCT = 5.0;
 
-// ── Preset scenarios ──────────────────────────────────────────────────────────
+// ── Scenarios ─────────────────────────────────────────────────────────────────
 const SCENARIOS = [
-  {
-    id: "bull",
-    label: "🚀 Bull Market",
-    tag: "12% strategy",
-    desc: "Strategy significantly outperforms. APEX captures amplified residual.",
-    strategyApyPct: 12,
-    capitalLossUsd: 0,
-  },
-  {
-    id: "normal",
-    label: "✅ Normal DeFi",
-    tag: "6% strategy",
-    desc: "Healthy DeFi conditions. All tiers paid, APEX earns meaningful premium.",
-    strategyApyPct: 6,
-    capitalLossUsd: 0,
-  },
-  {
-    id: "breakeven",
-    label: "⚖️ Near Breakeven",
-    tag: "3.2% strategy",
-    desc: "Strategy just covers CORE+SEAM. APEX earns minimal yield — APY reversal zone.",
-    strategyApyPct: 3.2,
-    capitalLossUsd: 0,
-  },
-  {
-    id: "low",
-    label: "📉 Low Yield",
-    tag: "1% strategy",
-    desc: "Strategy can't cover SEAM. APEX receives zero yield, absorbs shortfall from principal.",
-    strategyApyPct: 1,
-    capitalLossUsd: 0,
-  },
-  {
-    id: "small_loss",
-    label: "💥 Capital Loss",
-    tag: "–5% strategy",
-    desc: "Strategy loses principal. APEX absorbs loss first. CORE and SEAM unaffected.",
-    strategyApyPct: -5,
-    capitalLossUsd: 500,
-  },
-  {
-    id: "large_loss",
-    label: "🔥 APEX Depleted",
-    tag: "–20% strategy",
-    desc: "Loss exceeds APEX buffer. SEAM begins absorbing remainder. CORE still protected.",
-    strategyApyPct: -20,
-    capitalLossUsd: 2_100,
-  },
+  { id: "bull",       label: "Bull Market",    tag: "12% strategy",  desc: "Strategy significantly outperforms. APEX captures amplified residual.", strategyApyPct: 12,   capitalLossUsd: 0     },
+  { id: "normal",     label: "Normal DeFi",    tag: "6% strategy",   desc: "Healthy DeFi conditions. All tiers paid, APEX earns meaningful premium.", strategyApyPct: 6,    capitalLossUsd: 0     },
+  { id: "breakeven",  label: "Near Breakeven", tag: "3.2% strategy", desc: "Strategy just covers CORE+SEAM. APEX earns minimal yield — APY reversal zone.", strategyApyPct: 3.2, capitalLossUsd: 0    },
+  { id: "low",        label: "Low Yield",      tag: "1% strategy",   desc: "Strategy can't cover SEAM. APEX receives zero yield, absorbs shortfall from principal.", strategyApyPct: 1, capitalLossUsd: 0 },
+  { id: "small_loss", label: "Capital Loss",   tag: "–5% strategy",  desc: "Strategy loses principal. APEX absorbs loss first. CORE and SEAM unaffected.", strategyApyPct: -5, capitalLossUsd: 500   },
+  { id: "large_loss", label: "APEX Depleted",  tag: "–20% strategy", desc: "Loss exceeds APEX buffer. SEAM begins absorbing remainder. CORE still protected.", strategyApyPct: -20, capitalLossUsd: 2_100 },
 ] as const;
 
-// ── Simulation logic ──────────────────────────────────────────────────────────
+// ── Simulation ─────────────────────────────────────────────────────────────────
 type SimResult = {
-  coreYield: number;
-  seamYield: number;
-  apexYield: number;
-  coreApyPct: number;
-  seamApyPct: number;
-  apexApyPct: number;
-  coreLoss: number;
-  seamLoss: number;
-  apexLoss: number;
-  coreFinalTvl: number;
-  seamFinalTvl: number;
-  apexFinalTvl: number;
+  coreYield: number; seamYield: number; apexYield: number;
+  coreApyPct: number; seamApyPct: number; apexApyPct: number;
+  coreLoss: number; seamLoss: number; apexLoss: number;
+  coreFinalTvl: number; seamFinalTvl: number; apexFinalTvl: number;
   status: "healthy" | "apex_deficit" | "seam_hit" | "core_hit";
   note: string;
 };
 
 function simulate(strategyApyPct: number, capitalLossUsd: number): SimResult {
-  // Annual yield from strategy
   const totalStrategyYield = TOTAL_TVL * strategyApyPct / 100;
-
-  // Guaranteed yield due to CORE and SEAM
   const coreDue = CORE_TVL * CORE_TARGET_PCT / 100;
   const seamDue = SEAM_TVL * SEAM_TARGET_PCT / 100;
 
-  // --- Capital loss absorption (APEX → SEAM → CORE) ---
   let apexLoss = 0, seamLoss = 0, coreLoss = 0;
   let remainingLoss = Math.max(0, capitalLossUsd);
-
   const apexAbsorb = Math.min(remainingLoss, APEX_TVL);
-  apexLoss = apexAbsorb;
-  remainingLoss -= apexAbsorb;
-
+  apexLoss = apexAbsorb; remainingLoss -= apexAbsorb;
   const seamAbsorb = Math.min(remainingLoss, SEAM_TVL);
-  seamLoss = seamAbsorb;
-  remainingLoss -= seamAbsorb;
-
+  seamLoss = seamAbsorb; remainingLoss -= seamAbsorb;
   coreLoss = Math.min(remainingLoss, CORE_TVL);
 
-  // --- Yield distribution ---
   let availableYield = totalStrategyYield;
   let coreYield = 0, seamYield = 0, apexYield = 0;
 
-  // CORE gets its due first (from yield, then deficit absorbed by APEX principal)
   if (availableYield >= coreDue) {
-    coreYield = coreDue;
-    availableYield -= coreDue;
+    coreYield = coreDue; availableYield -= coreDue;
   } else {
-    // Yield deficit — APEX absorbs difference from principal
     const coreDeficit = coreDue - availableYield;
-    coreYield = coreDue; // CORE still gets its full target (absorbed by APEX)
-    apexLoss += coreDeficit;
-    availableYield = 0;
+    coreYield = coreDue; apexLoss += coreDeficit; availableYield = 0;
   }
 
-  // SEAM gets its due next
   if (availableYield >= seamDue) {
-    seamYield = seamDue;
-    availableYield -= seamDue;
+    seamYield = seamDue; availableYield -= seamDue;
   } else {
     const seamDeficit = seamDue - availableYield;
     seamYield = Math.max(0, availableYield);
-    // Deficit: first drain APEX principal, then SEAM absorbs
     const apexCanAbsorb = Math.max(0, APEX_TVL - apexLoss);
     const apexDeficitAbsorb = Math.min(seamDeficit, apexCanAbsorb);
     apexLoss += apexDeficitAbsorb;
     const remaining = seamDeficit - apexDeficitAbsorb;
-    if (remaining > 0) {
-      seamLoss += remaining;
-      seamYield = seamDue - remaining;
-    } else {
-      seamYield = seamDue;
-    }
+    if (remaining > 0) { seamLoss += remaining; seamYield = seamDue - remaining; }
+    else { seamYield = seamDue; }
     availableYield = 0;
   }
 
-  // APEX gets whatever is left (can be negative if principal was tapped)
   apexYield = Math.max(0, availableYield);
 
-  // Final TVL after losses
-  const coreFinalTvl  = CORE_TVL  - coreLoss;
-  const seamFinalTvl  = SEAM_TVL  - seamLoss;
-  const apexFinalTvl  = Math.max(0, APEX_TVL - apexLoss);
-
-  // APY per tier
+  const coreFinalTvl = CORE_TVL - coreLoss;
+  const seamFinalTvl = SEAM_TVL - seamLoss;
+  const apexFinalTvl = Math.max(0, APEX_TVL - apexLoss);
   const coreApyPct = CORE_TVL > 0 ? (coreYield / CORE_TVL) * 100 : 0;
   const seamApyPct = SEAM_TVL > 0 ? (seamYield / SEAM_TVL) * 100 : 0;
   const apexApyPct = APEX_TVL > 0 ? (apexYield / APEX_TVL) * 100 : 0;
 
-  // Status
   let status: SimResult["status"] = "healthy";
   let note = "All tiers fully paid. APEX earns leveraged residual.";
+  if (coreLoss > 0) { status = "core_hit"; note = "APEX and SEAM depleted. CORE principal absorbing losses — extreme scenario."; }
+  else if (seamLoss > 0) { status = "seam_hit"; note = "APEX buffer depleted. SEAM principal absorbing remaining shortfall."; }
+  else if (apexLoss > 0 && capitalLossUsd === 0) { status = "apex_deficit"; note = "Yield too low to cover CORE+SEAM targets. APEX principal absorbs deficit. CORE and SEAM fully protected."; }
+  else if (apexLoss > 0) { status = "apex_deficit"; note = "Capital loss absorbed by APEX. CORE and SEAM principal unaffected."; }
 
-  if (coreLoss > 0) {
-    status = "core_hit";
-    note = "⚠️ APEX and SEAM depleted. CORE principal absorbing losses — extreme scenario.";
-  } else if (seamLoss > 0) {
-    status = "seam_hit";
-    note = "APEX buffer depleted. SEAM principal absorbing remaining shortfall.";
-  } else if (apexLoss > 0 && capitalLossUsd === 0) {
-    status = "apex_deficit";
-    note = "Yield too low to cover CORE+SEAM targets. APEX principal absorbs deficit. CORE and SEAM fully protected.";
-  } else if (apexLoss > 0) {
-    status = "apex_deficit";
-    note = "Capital loss absorbed by APEX. CORE and SEAM principal unaffected.";
-  }
-
-  return {
-    coreYield, seamYield, apexYield,
-    coreApyPct, seamApyPct, apexApyPct,
-    coreLoss, seamLoss, apexLoss,
-    coreFinalTvl, seamFinalTvl, apexFinalTvl,
-    status, note,
-  };
+  return { coreYield, seamYield, apexYield, coreApyPct, seamApyPct, apexApyPct, coreLoss, seamLoss, apexLoss, coreFinalTvl, seamFinalTvl, apexFinalTvl, status, note };
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-function fmt(n: number) {
-  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
+const fmt = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const pct = (n: number) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
 
-function pct(n: number) {
-  return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
-}
+const eyebrow: React.CSSProperties = {
+  font: "var(--fw-semibold) var(--text-2xs)/1 var(--font-sans)",
+  letterSpacing: "var(--ls-wider)", textTransform: "uppercase", color: "var(--text-muted)",
+};
+
+const STATUS_BG: Record<SimResult["status"], string> = {
+  healthy:      "var(--positive-bg)",
+  apex_deficit: "var(--warning-bg)",
+  seam_hit:     "var(--seam-50)",
+  core_hit:     "var(--danger-bg)",
+};
 
 function TierResult({
-  name, principal, yield: yld, apy, loss, finalTvl, lossColor, apyColor,
+  name, ordinal, principal, yield: yld, apy, loss, finalTvl, apyColor, accent,
 }: {
-  name: string; principal: number; yield: number; apy: number; loss: number;
-  finalTvl: number; lossColor: string; apyColor: string;
+  name: string; ordinal: string; principal: number; yield: number; apy: number;
+  loss: number; finalTvl: number; apyColor: string; accent: "core" | "seam" | "apex";
 }) {
   const lossPct = principal > 0 ? (loss / principal) * 100 : 0;
   return (
-    <div className="border border-gray-200 p-4">
-      <p className="text-xs text-gray-400 uppercase mb-3">{name}</p>
-
-      {/* APY — big number */}
-      <div className="mb-4">
-        <p className="text-xs text-gray-500">Effective APY</p>
-        <p className={`text-3xl font-bold font-mono ${apyColor}`}>{pct(apy)}</p>
+    <Card accent={accent} pad="lg" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      <div style={{ ...eyebrow }}>
+        {name} <span style={{ color: `var(--${accent}-500)` }}>{ordinal}</span>
       </div>
-
-      <div className="space-y-2 text-xs">
-        <div className="flex justify-between">
-          <span className="text-gray-500">Starting TVL</span>
-          <span className="font-mono">{fmt(principal)}</span>
+      <div>
+        <div style={{ font: "400 11px/1 var(--font-sans)", color: "var(--text-faint)", marginBottom: "5px" }}>Effective APY</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "30px", color: apyColor, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+          {pct(apy)}
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Yield earned</span>
-          <span className="font-mono text-green-700">+{fmt(yld)}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", font: "400 12px/1 var(--font-sans)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ color: "var(--text-muted)" }}>Starting TVL</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-body)", fontVariantNumeric: "tabular-nums" }}>{fmt(principal)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ color: "var(--text-muted)" }}>Yield earned</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--positive)", fontVariantNumeric: "tabular-nums" }}>+{fmt(yld)}</span>
         </div>
         {loss > 0 && (
-          <div className="flex justify-between">
-            <span className={lossColor}>Principal absorbed</span>
-            <span className={`font-mono ${lossColor}`}>−{fmt(loss)} ({lossPct.toFixed(1)}%)</span>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--danger)" }}>Principal absorbed</span>
+            <span style={{ fontFamily: "var(--font-mono)", color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>−{fmt(loss)} ({lossPct.toFixed(1)}%)</span>
           </div>
         )}
-        <div className="flex justify-between border-t border-gray-100 pt-2 font-bold">
-          <span className="text-gray-600">Final balance</span>
-          <span className={`font-mono ${loss > 0 ? lossColor : "text-black"}`}>{fmt(finalTvl + yld)}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-soft)", paddingTop: "9px", fontWeight: 700 }}>
+          <span style={{ color: "var(--text-strong)" }}>Final balance</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: loss > 0 ? "var(--danger)" : "var(--text-strong)", fontVariantNumeric: "tabular-nums" }}>{fmt(finalTvl + yld)}</span>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function ScenariosPage() {
   const [activeScenario, setActiveScenario] = useState<string>("normal");
   const [customApy, setCustomApy]   = useState(6);
@@ -238,280 +153,228 @@ export default function ScenariosPage() {
   const scenario = SCENARIOS.find((s) => s.id === activeScenario)!;
   const stratApy = isCustom ? customApy : scenario.strategyApyPct;
   const lossUsd  = isCustom ? customLoss : scenario.capitalLossUsd;
-
-  const result = simulate(stratApy, lossUsd);
-
-  const statusBg: Record<SimResult["status"], string> = {
-    healthy:      "bg-green-50 border-green-200",
-    apex_deficit: "bg-yellow-50 border-yellow-200",
-    seam_hit:     "bg-orange-50 border-orange-200",
-    core_hit:     "bg-red-50 border-red-200",
-  };
+  const result   = simulate(stratApy, lossUsd);
 
   const apexApyColor =
-    result.apexApyPct > result.seamApyPct ? "text-red-700" :
-    result.apexApyPct > 0                ? "text-orange-600" :
-                                           "text-gray-400";
+    result.apexApyPct > result.seamApyPct ? "var(--apex-600)" :
+    result.apexApyPct > 0                 ? "var(--seam-600)" :
+                                            "var(--text-faint)";
+
+  const maxApy = Math.max(result.coreApyPct, result.seamApyPct, result.apexApyPct, 0.1);
+  const floor = ((CORE_TVL * CORE_TARGET_PCT / 100 + SEAM_TVL * SEAM_TARGET_PCT / 100) / TOTAL_TVL * 100).toFixed(2);
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-1">Tranche Scenarios</h1>
-      <p className="text-sm text-gray-400 mb-6">
-        How the CDO waterfall distributes yield and absorbs losses across different market conditions
-      </p>
-
-      {/* Pool setup reference */}
-      <div className="border border-gray-200 p-4 mb-6 text-xs">
-        <p className="font-bold mb-2 text-sm">Simulation Setup</p>
-        <div className="grid grid-cols-4 gap-4 font-mono">
-          <div>
-            <p className="text-gray-400">Total TVL</p>
-            <p className="font-bold">{fmt(TOTAL_TVL)}</p>
-          </div>
-          <div>
-            <p className="text-green-700">CORE (42.5%)</p>
-            <p className="font-bold">{fmt(CORE_TVL)} · {CORE_TARGET_PCT}% guaranteed</p>
-          </div>
-          <div>
-            <p className="text-yellow-700">SEAM (42.5%)</p>
-            <p className="font-bold">{fmt(SEAM_TVL)} · {SEAM_TARGET_PCT}% guaranteed</p>
-          </div>
-          <div>
-            <p className="text-red-700">APEX (15%)</p>
-            <p className="font-bold">{fmt(APEX_TVL)} · first-loss buffer</p>
-          </div>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "40px 0 60px" }}>
+      {/* Header */}
+      <div>
+        <h1 style={{ font: "var(--fw-bold) 34px/1 var(--font-serif)", color: "var(--text-strong)", letterSpacing: "-0.02em", margin: "0 0 8px" }}>
+          Tranche Scenarios
+        </h1>
+        <p style={{ font: "400 14px/1.5 var(--font-sans)", color: "var(--text-muted)", maxWidth: "620px", margin: 0 }}>
+          How the CDO waterfall distributes yield and absorbs losses across different market conditions.
+        </p>
       </div>
 
+      {/* Setup reference */}
+      <Card surface="sunken" pad="md">
+        <div style={{ ...eyebrow, marginBottom: "14px" }}>Simulation Setup</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "18px" }}>
+          {[
+            { label: "Total TVL", value: fmt(TOTAL_TVL), sub: null, color: "var(--text-muted)" },
+            { label: "CORE · 50%", value: fmt(CORE_TVL), sub: `${CORE_TARGET_PCT}% guaranteed`, color: "var(--core-600)" },
+            { label: "SEAM · 27%", value: fmt(SEAM_TVL), sub: `${SEAM_TARGET_PCT}% guaranteed`, color: "var(--seam-600)" },
+            { label: "APEX · 23%", value: fmt(APEX_TVL), sub: "first-loss buffer",              color: "var(--apex-600)" },
+          ].map((col) => (
+            <div key={col.label}>
+              <div style={{ font: "400 11px/1 var(--font-sans)", color: col.color, marginBottom: "5px" }}>{col.label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "15px", color: "var(--text-strong)", fontVariantNumeric: "tabular-nums" }}>{col.value}</div>
+              {col.sub && <div style={{ font: "400 10px/1.3 var(--font-mono)", color: "var(--text-faint)", marginTop: "3px" }}>{col.sub}</div>}
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* Scenario selector */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
-        {SCENARIOS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => { setActiveScenario(s.id); setIsCustom(false); }}
-            className={`text-left p-3 border text-xs transition-colors ${
-              !isCustom && activeScenario === s.id
-                ? "border-black bg-black text-white"
-                : "border-gray-200 hover:border-gray-400"
-            }`}
-          >
-            <p className="font-bold">{s.label}</p>
-            <p className={`font-mono mt-0.5 ${!isCustom && activeScenario === s.id ? "text-gray-300" : "text-gray-500"}`}>
-              {s.tag}
-            </p>
-          </button>
-        ))}
-        <button
-          onClick={() => setIsCustom(true)}
-          className={`text-left p-3 border text-xs transition-colors ${
-            isCustom
-              ? "border-black bg-black text-white"
-              : "border-dashed border-gray-300 hover:border-gray-400"
-          }`}
-        >
-          <p className="font-bold">🔧 Custom</p>
-          <p className={`font-mono mt-0.5 ${isCustom ? "text-gray-300" : "text-gray-500"}`}>
-            set your own
-          </p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+        {SCENARIOS.map((s) => {
+          const on = !isCustom && activeScenario === s.id;
+          return (
+            <button key={s.id} type="button" onClick={() => { setActiveScenario(s.id); setIsCustom(false); }} style={{
+              textAlign: "left", padding: "13px 15px", borderRadius: "var(--r-md)", cursor: "pointer",
+              background: on ? "var(--rock-900)" : "var(--surface-raised)",
+              border: `1.5px solid ${on ? "var(--rock-900)" : "var(--border)"}`,
+              transition: "all var(--dur-fast) var(--ease-out)",
+            }}>
+              <div style={{ font: "var(--fw-bold) 13px/1.2 var(--font-sans)", color: on ? "var(--sand-50)" : "var(--text-strong)" }}>{s.label}</div>
+              <div style={{ font: "400 11px/1 var(--font-mono)", color: on ? "var(--rock-200)" : "var(--text-faint)", marginTop: "5px" }}>{s.tag}</div>
+            </button>
+          );
+        })}
+        <button type="button" onClick={() => setIsCustom(true)} style={{
+          textAlign: "left", padding: "13px 15px", borderRadius: "var(--r-md)", cursor: "pointer",
+          background: isCustom ? "var(--rock-900)" : "transparent",
+          border: `1.5px dashed ${isCustom ? "var(--rock-900)" : "var(--rock-300)"}`,
+          transition: "all var(--dur-fast) var(--ease-out)",
+        }}>
+          <div style={{ font: "var(--fw-bold) 13px/1.2 var(--font-sans)", color: isCustom ? "var(--sand-50)" : "var(--text-strong)" }}>Custom</div>
+          <div style={{ font: "400 11px/1 var(--font-mono)", color: isCustom ? "var(--rock-200)" : "var(--text-faint)", marginTop: "5px" }}>set your own</div>
         </button>
       </div>
 
-      {/* Scenario description / custom inputs */}
-      <div className="mb-6">
-        {isCustom ? (
-          <div className="border border-dashed border-gray-300 p-4 grid sm:grid-cols-2 gap-6 text-sm">
+      {/* Description or sliders */}
+      {isCustom ? (
+        <Card pad="lg" style={{ border: "1.5px dashed var(--rock-300)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "28px" }}>
             <div>
-              <label className="block text-xs text-gray-500 mb-2">
-                Strategy APY: <span className="font-mono font-bold text-black">{customApy}%</span>
+              <label style={{ display: "block", font: "var(--fw-medium) 12px/1 var(--font-sans)", color: "var(--text-muted)", marginBottom: "12px" }}>
+                Strategy APY: <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-strong)" }}>{customApy}%</span>
               </label>
-              <input
-                type="range" min={-25} max={25} step={0.5}
-                value={customApy}
-                onChange={(e) => setCustomApy(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
+              <input type="range" min={-25} max={25} step={0.5} value={customApy} onChange={(e) => setCustomApy(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--rock-700)" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)" }}>
                 <span>−25%</span><span>0%</span><span>+25%</span>
               </div>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-2">
-                Capital loss: <span className="font-mono font-bold text-black">{fmt(customLoss)}</span>
+              <label style={{ display: "block", font: "var(--fw-medium) 12px/1 var(--font-sans)", color: "var(--text-muted)", marginBottom: "12px" }}>
+                Capital loss: <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-strong)" }}>{fmt(customLoss)}</span>
               </label>
-              <input
-                type="range" min={0} max={3000} step={100}
-                value={customLoss}
-                onChange={(e) => setCustomLoss(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
+              <input type="range" min={0} max={3000} step={100} value={customLoss} onChange={(e) => setCustomLoss(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--apex-600)" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)" }}>
                 <span>$0</span><span>$1,500 (APEX)</span><span>$3,000</span>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            {scenario.desc}
-          </div>
-        )}
-      </div>
+        </Card>
+      ) : (
+        <Card surface="sunken" pad="md">
+          <p style={{ font: "400 13px/1.5 var(--font-sans)", color: "var(--text-body)", margin: 0 }}>{scenario.desc}</p>
+        </Card>
+      )}
 
       {/* Strategy yield bar */}
-      <div className="border border-gray-200 p-4 mb-6">
-        <div className="flex justify-between text-xs mb-2">
-          <span className="text-gray-500">Strategy yield on {fmt(TOTAL_TVL)} TVL</span>
-          <span className={`font-mono font-bold ${stratApy >= 0 ? "text-green-700" : "text-red-700"}`}>
-            {stratApy >= 0 ? "+" : ""}{(TOTAL_TVL * stratApy / 100).toFixed(0)} USDC/yr
-            &nbsp;({stratApy}% APY)
+      <Card pad="lg">
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+          <span style={{ font: "400 12px/1 var(--font-sans)", color: "var(--text-muted)" }}>
+            Strategy yield on {fmt(TOTAL_TVL)} TVL
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "12px", color: stratApy >= 0 ? "var(--positive)" : "var(--danger)", fontVariantNumeric: "tabular-nums" }}>
+            {stratApy >= 0 ? "+" : ""}{Math.round(TOTAL_TVL * stratApy / 100).toLocaleString()} USDC/yr ({stratApy}% APY)
           </span>
         </div>
-        <div className="h-3 bg-gray-100 w-full">
-          {stratApy >= 0 ? (
-            <div
-              className="h-3 bg-green-500 transition-all"
-              style={{ width: `${Math.min(stratApy / 25 * 100, 100)}%` }}
-            />
-          ) : (
-            <div
-              className="h-3 bg-red-500 transition-all ml-auto"
-              style={{ width: `${Math.min(Math.abs(stratApy) / 25 * 100, 100)}%` }}
-            />
-          )}
+        <div style={{ position: "relative", height: "12px", background: "var(--surface-sunken)", borderRadius: "var(--r-pill)", overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(26,23,20,0.1)" }}>
+          <div style={{
+            position: "absolute", top: 0, bottom: 0,
+            ...(stratApy >= 0 ? { left: 0 } : { right: 0 }),
+            width: `${Math.min(Math.abs(stratApy) / 25 * 100, 100)}%`,
+            background: stratApy >= 0 ? "var(--positive)" : "var(--danger)",
+            borderRadius: "var(--r-pill)",
+            transition: "width var(--dur-slow) var(--ease-out)",
+          }} />
         </div>
-        <div className="flex justify-between text-xs text-gray-300 mt-1">
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", font: "400 11px/1 var(--font-mono)", color: "var(--text-faint)" }}>
           <span>−25%</span>
-          <span className="text-gray-500">
-            CORE+SEAM floor: {((CORE_TVL * CORE_TARGET_PCT / 100 + SEAM_TVL * SEAM_TARGET_PCT / 100) / TOTAL_TVL * 100).toFixed(2)}%
-          </span>
+          <span style={{ color: "var(--text-muted)" }}>CORE+SEAM floor: {floor}%</span>
           <span>+25%</span>
         </div>
-      </div>
+      </Card>
 
       {/* Outcome status */}
-      <div className={`border px-4 py-3 mb-6 text-sm ${statusBg[result.status]}`}>
-        <p>{result.note}</p>
+      <div style={{ padding: "14px 18px", borderRadius: "var(--r-md)", background: STATUS_BG[result.status] }}>
+        <p style={{ font: "var(--fw-medium) 13px/1.5 var(--font-sans)", color: "var(--text-body)", margin: 0 }}>{result.note}</p>
       </div>
 
       {/* Tier results */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <TierResult
-          name="CORE — Last-loss ③"
-          principal={CORE_TVL}
-          yield={result.coreYield}
-          apy={result.coreApyPct}
-          loss={result.coreLoss}
-          finalTvl={result.coreFinalTvl}
-          lossColor="text-red-700"
-          apyColor="text-green-700"
-        />
-        <TierResult
-          name="SEAM — Second-loss ②"
-          principal={SEAM_TVL}
-          yield={result.seamYield}
-          apy={result.seamApyPct}
-          loss={result.seamLoss}
-          finalTvl={result.seamFinalTvl}
-          lossColor="text-orange-600"
-          apyColor="text-yellow-700"
-        />
-        <TierResult
-          name="APEX — First-loss ①"
-          principal={APEX_TVL}
-          yield={result.apexYield}
-          apy={result.apexApyPct}
-          loss={result.apexLoss}
-          finalTvl={result.apexFinalTvl}
-          lossColor="text-red-700"
-          apyColor={apexApyColor}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+        <TierResult name="CORE — Last-loss" ordinal="③" principal={CORE_TVL} yield={result.coreYield} apy={result.coreApyPct} loss={result.coreLoss} finalTvl={result.coreFinalTvl} apyColor="var(--positive)" accent="core" />
+        <TierResult name="SEAM — Second-loss" ordinal="②" principal={SEAM_TVL} yield={result.seamYield} apy={result.seamApyPct} loss={result.seamLoss} finalTvl={result.seamFinalTvl} apyColor="var(--seam-700)" accent="seam" />
+        <TierResult name="APEX — First-loss" ordinal="①" principal={APEX_TVL} yield={result.apexYield} apy={result.apexApyPct} loss={result.apexLoss} finalTvl={result.apexFinalTvl} apyColor={apexApyColor} accent="apex" />
       </div>
 
-      {/* Waterfall breakdown */}
-      <div className="border border-gray-200 mb-8">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <p className="text-sm font-bold">Waterfall Breakdown</p>
-        </div>
-        <div className="p-4 space-y-3 text-xs font-mono">
-          <div className="flex justify-between">
-            <span className="text-gray-500">Strategy yield ({stratApy}% × {fmt(TOTAL_TVL)})</span>
-            <span className={stratApy >= 0 ? "text-green-700" : "text-red-700"}>
-              {stratApy >= 0 ? "+" : ""}{(TOTAL_TVL * stratApy / 100).toFixed(0)} USDC
-            </span>
+      {/* APY comparison */}
+      <Card pad="lg">
+        <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: "0 0 18px" }}>
+          APY Comparison
+        </h3>
+        {([
+          { label: "CORE", apy: result.coreApyPct, tone: "core" as const },
+          { label: "SEAM", apy: result.seamApyPct, tone: "seam" as const },
+          { label: "APEX", apy: result.apexApyPct, tone: "apex" as const },
+        ]).map((row) => (
+          <div key={row.label} style={{ marginBottom: "12px" }}>
+            <StrataBar
+              label={row.label}
+              valueLabel={pct(row.apy)}
+              value={Math.max((row.apy / maxApy) * 100, 0)}
+              max={100}
+              tone={row.tone}
+              height={12}
+            />
           </div>
-          <div className="flex justify-between pl-4">
-            <span className="text-green-700">→ CORE receives ({CORE_TARGET_PCT}% × {fmt(CORE_TVL)})</span>
-            <span>−{result.coreYield.toFixed(0)} USDC</span>
-          </div>
-          <div className="flex justify-between pl-4">
-            <span className="text-yellow-700">→ SEAM receives ({SEAM_TARGET_PCT}% × {fmt(SEAM_TVL)})</span>
-            <span>−{result.seamYield.toFixed(0)} USDC</span>
-          </div>
-          <div className="flex justify-between pl-4 border-t border-gray-100 pt-2">
-            <span className="text-red-700">→ APEX residual</span>
-            <span className={result.apexYield > 0 ? "text-red-700" : "text-gray-400"}>
-              {result.apexYield > 0 ? "+" : ""}{result.apexYield.toFixed(0)} USDC
-            </span>
-          </div>
-          {(result.apexLoss > 0 || result.seamLoss > 0 || result.coreLoss > 0) && (
-            <>
-              <div className="border-t border-gray-200 pt-2">
-                <p className="text-gray-500 mb-2">Loss absorption:</p>
-              </div>
-              {result.apexLoss > 0 && (
-                <div className="flex justify-between pl-4">
-                  <span className="text-red-700">APEX principal absorbed</span>
-                  <span className="text-red-700">−{result.apexLoss.toFixed(0)} USDC</span>
-                </div>
-              )}
-              {result.seamLoss > 0 && (
-                <div className="flex justify-between pl-4">
-                  <span className="text-orange-600">SEAM principal absorbed</span>
-                  <span className="text-orange-600">−{result.seamLoss.toFixed(0)} USDC</span>
-                </div>
-              )}
-              {result.coreLoss > 0 && (
-                <div className="flex justify-between pl-4">
-                  <span className="text-red-900">CORE principal absorbed</span>
-                  <span className="text-red-900">−{result.coreLoss.toFixed(0)} USDC</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* APY comparison bar chart */}
-      <div className="border border-gray-200 p-4">
-        <p className="text-sm font-bold mb-4">APY Comparison</p>
-        {[
-          { label: "CORE", apy: result.coreApyPct, color: "bg-green-500", textColor: "text-green-700" },
-          { label: "SEAM", apy: result.seamApyPct, color: "bg-yellow-400", textColor: "text-yellow-700" },
-          { label: "APEX", apy: result.apexApyPct, color: "bg-red-500",   textColor: "text-red-700"   },
-        ].map(({ label, apy, color, textColor }) => {
-          const maxApy = Math.max(result.coreApyPct, result.seamApyPct, result.apexApyPct, 0.1);
-          return (
-            <div key={label} className="mb-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span className={`font-bold ${textColor}`}>{label}</span>
-                <span className={`font-mono font-bold ${textColor}`}>{pct(apy)}</span>
-              </div>
-              <div className="h-4 bg-gray-100 w-full">
-                <div
-                  className={`h-4 ${color} transition-all`}
-                  style={{ width: `${Math.max(apy / maxApy * 100, 0)}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-        <p className="text-xs text-gray-400 mt-3">
+        ))}
+        <p style={{ font: "400 12px/1.5 var(--font-sans)", color: "var(--text-faint)", marginTop: "10px" }}>
           {result.apexApyPct > result.seamApyPct
             ? `APEX earns ${(result.apexApyPct / Math.max(result.coreApyPct, 0.01)).toFixed(1)}× CORE — leverage at work.`
             : result.apexApyPct === 0
             ? "APEX earns 0% — absorbing losses instead."
             : "APY reversal: low strategy yield means APEX earns less than CORE despite first-loss risk."}
         </p>
-      </div>
+      </Card>
+
+      {/* Waterfall breakdown */}
+      <Card pad="none">
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
+          <h3 style={{ font: "var(--fw-semibold) 16px/1 var(--font-serif)", color: "var(--text-strong)", margin: 0 }}>
+            Waterfall Breakdown
+          </h3>
+        </div>
+        <div style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "10px", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--text-muted)" }}>Strategy yield ({stratApy}% × {fmt(TOTAL_TVL)})</span>
+            <span style={{ color: stratApy >= 0 ? "var(--positive)" : "var(--danger)", fontVariantNumeric: "tabular-nums" }}>
+              {stratApy >= 0 ? "+" : ""}{(TOTAL_TVL * stratApy / 100).toFixed(0)} USDC
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", paddingLeft: "16px" }}>
+            <span style={{ color: "var(--core-600)" }}>→ CORE receives ({CORE_TARGET_PCT}% × {fmt(CORE_TVL)})</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>−{result.coreYield.toFixed(0)} USDC</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", paddingLeft: "16px" }}>
+            <span style={{ color: "var(--seam-600)" }}>→ SEAM receives ({SEAM_TARGET_PCT}% × {fmt(SEAM_TVL)})</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>−{result.seamYield.toFixed(0)} USDC</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", paddingLeft: "16px", borderTop: "1px solid var(--border-soft)", paddingTop: "9px" }}>
+            <span style={{ color: "var(--apex-600)" }}>→ APEX residual</span>
+            <span style={{ color: result.apexYield > 0 ? "var(--apex-600)" : "var(--text-faint)", fontVariantNumeric: "tabular-nums" }}>
+              {result.apexYield > 0 ? "+" : ""}{result.apexYield.toFixed(0)} USDC
+            </span>
+          </div>
+          {(result.apexLoss > 0 || result.seamLoss > 0 || result.coreLoss > 0) && (
+            <>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: "9px" }}>
+                <span style={{ color: "var(--text-muted)" }}>Loss absorption:</span>
+              </div>
+              {result.apexLoss > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", paddingLeft: "16px" }}>
+                  <span style={{ color: "var(--danger)" }}>APEX principal absorbed</span>
+                  <span style={{ color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>−{result.apexLoss.toFixed(0)} USDC</span>
+                </div>
+              )}
+              {result.seamLoss > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", paddingLeft: "16px" }}>
+                  <span style={{ color: "var(--warning)" }}>SEAM principal absorbed</span>
+                  <span style={{ color: "var(--warning)", fontVariantNumeric: "tabular-nums" }}>−{result.seamLoss.toFixed(0)} USDC</span>
+                </div>
+              )}
+              {result.coreLoss > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", paddingLeft: "16px" }}>
+                  <span style={{ color: "var(--danger)" }}>CORE principal absorbed</span>
+                  <span style={{ color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>−{result.coreLoss.toFixed(0)} USDC</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
