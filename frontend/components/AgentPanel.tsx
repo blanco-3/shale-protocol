@@ -35,6 +35,12 @@ export function AgentPanel() {
     functionName: "latestProposal",
   });
 
+  // hooks must be called unconditionally — before any early return
+  const isPendingProposal = proposal ? !proposal.executed && !proposal.rejected : false;
+  const secondsLeft = useCountdown(isPendingProposal && proposal ? proposal.proposedAt : undefined);
+  const delayPassed = secondsLeft === 0;
+  const busy = isPending || isConfirming;
+
   if (error || !proposal) {
     return (
       <Card surface="ink" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -48,11 +54,6 @@ export function AgentPanel() {
       </Card>
     );
   }
-
-  const isPendingProposal = !proposal.executed && !proposal.rejected;
-  const busy = isPending || isConfirming;
-  const secondsLeft = useCountdown(isPendingProposal ? proposal.proposedAt : undefined);
-  const delayPassed = secondsLeft === 0;
 
   const statusTone = proposal.executed ? "positive" : proposal.rejected ? "neutral" : "warning";
   const statusLabel = proposal.executed ? "EXECUTED" : proposal.rejected ? "REJECTED" : "PENDING";
