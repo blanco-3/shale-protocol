@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useReadContracts } from "wagmi";
 import { VAULT_ADDRESS, VAULT_ABI } from "../../lib/contracts";
-import { formatUsdc } from "../../lib/utils";
+import { formatUsdc, formatUsdcCompact } from "../../lib/utils";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { StatTile } from "../../components/ui/StatTile";
@@ -199,7 +199,7 @@ export default function SafetyPage() {
                   {row.k}
                 </div>
                 <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "20px", color: "var(--text-strong)", marginBottom: "10px", fontVariantNumeric: "tabular-nums" }}>
-                  {formatUsdc(row.v)}
+                  {formatUsdcCompact(row.v)}
                 </div>
                 <StrataBar value={p} tone={row.tone} valueLabel={`${p.toFixed(1)}%`} height={8} />
               </div>

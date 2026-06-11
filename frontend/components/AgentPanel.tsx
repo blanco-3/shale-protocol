@@ -1,10 +1,28 @@
 "use client";
+import { useState, useEffect } from "react";
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { GOVERNOR_ADDRESS, GOVERNOR_ABI } from "../lib/contracts";
 import { bpsToPercent } from "../lib/utils";
 import { Card } from "./ui/Card";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+
+const MIN_DELAY = 300; // seconds — must match ShaleGovernor.minDelay
+
+function useCountdown(proposedAt: bigint | undefined): number {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  useEffect(() => {
+    if (!proposedAt) return;
+    const tick = () => {
+      const unlockAt = Number(proposedAt) + MIN_DELAY;
+      setSecondsLeft(Math.max(0, unlockAt - Math.floor(Date.now() / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [proposedAt]);
+  return secondsLeft;
+}
 
 export function AgentPanel() {
   const { isConnected } = useAccount();
@@ -33,6 +51,8 @@ export function AgentPanel() {
 
   const isPendingProposal = !proposal.executed && !proposal.rejected;
   const busy = isPending || isConfirming;
+  const secondsLeft = useCountdown(isPendingProposal ? proposal.proposedAt : undefined);
+  const delayPassed = secondsLeft === 0;
 
   const statusTone = proposal.executed ? "positive" : proposal.rejected ? "neutral" : "warning";
   const statusLabel = proposal.executed ? "EXECUTED" : proposal.rejected ? "REJECTED" : "PENDING";
@@ -90,24 +110,30 @@ export function AgentPanel() {
       )}
 
       {isPendingProposal && isConnected && (
-        <Button
-          tone="accent"
-          size="sm"
-          disabled={busy}
-          onClick={() =>
-            writeContract({
-              address: GOVERNOR_ADDRESS,
-              abi: GOVERNOR_ABI,
-              functionName: "executeProposal",
-              args: [proposal.id],
-              maxFeePerGas: 500_000_000n,
-              maxPriorityFeePerGas: 1_000_000n,
-            })
-          }
-          style={{ alignSelf: "flex-start" }}
-        >
-          {busy ? "Accepting…" : "Accept →"}
-        </Button>
+        delayPassed ? (
+          <Button
+            tone="accent"
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+              writeContract({
+                address: GOVERNOR_ADDRESS,
+                abi: GOVERNOR_ABI,
+                functionName: "executeProposal",
+                args: [proposal.id],
+                maxFeePerGas: 500_000_000n,
+                maxPriorityFeePerGas: 1_000_000n,
+              })
+            }
+            style={{ alignSelf: "flex-start" }}
+          >
+            {busy ? "Accepting…" : "Accept →"}
+          </Button>
+        ) : (
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-faint)", margin: 0 }}>
+            Executable in {Math.floor(secondsLeft / 60)}m {secondsLeft % 60}s
+          </p>
+        )
       )}
     </Card>
   );

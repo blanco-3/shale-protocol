@@ -9,7 +9,7 @@ import {
   CAMELOT_STRATEGY_ADDRESS, SIM_CAMELOT_ABI,
   MORPHO_STRATEGY_ADDRESS, SIM_MORPHO_ABI,
 } from "../../lib/contracts";
-import { formatUsdc, bpsToPercent } from "../../lib/utils";
+import { formatUsdc, formatUsdcCompact, bpsToPercent } from "../../lib/utils";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { StatTile } from "../../components/ui/StatTile";
@@ -264,9 +264,9 @@ export default function AnalyticsPage() {
 
       {/* Top stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <Card pad="md"><StatTile label="Total TVL"       value={loading ? "—" : formatUsdc(totalTVL)}               sub="principal + yield" /></Card>
-        <Card pad="md"><StatTile label="Total Principal" value={loading ? "—" : formatUsdc(totalPrincipal)} /></Card>
-        <Card pad="md"><StatTile label="Accrued Yield"   value={loading ? "—" : formatUsdc(totalYield)}             sub={`Epoch #${epochCount.toString()}`} /></Card>
+        <Card pad="md"><StatTile label="Total TVL"       value={loading ? "—" : formatUsdcCompact(totalTVL)}               sub="principal + yield" /></Card>
+        <Card pad="md"><StatTile label="Total Principal" value={loading ? "—" : formatUsdcCompact(totalPrincipal)} /></Card>
+        <Card pad="md"><StatTile label="Accrued Yield"   value={loading ? "—" : formatUsdcCompact(totalYield)}             sub={`Epoch #${epochCount.toString()}`} /></Card>
         <Card pad="md"><StatTile label="APEX Buffer"     value={loading ? "—" : `${apexRatioPct.toFixed(1)}%`}      sub="of total principal" /></Card>
       </div>
 
