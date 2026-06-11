@@ -1,26 +1,253 @@
 @import "tailwindcss";
 
+/* ============================================================
+   SHALE — Color tokens
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Rock scale */
+  --rock-950: #120f0c;
+  --rock-900: #1a1714;
+  --rock-800: #271f18;
+  --rock-700: #3a2c1f;
+  --rock-600: #5c3318;
+  --rock-500: #7c4a22;
+  --rock-400: #a06828;
+  --rock-300: #c08a45;
+  --rock-200: #d9a96b;
+  --rock-150: #e7cda0;
+  --rock-100: #efe0c8;
+  --sand-100: #f0e7d6;
+  --sand-75:  #f5efe3;
+  --sand-50:  #f9f4ea;
+  --paper:    #fdfaf3;
+
+  /* Tier accents */
+  --core-700: #3a4a26;  --core-600: #4c5f31;  --core-500: #5e743d;
+  --core-300: #95a96d;  --core-100: #e7ecd7;  --core-50:  #f1f4e7;
+
+  --seam-700: #8a5a16;  --seam-600: #a87320;  --seam-500: #c2862a;
+  --seam-300: #e0b061;  --seam-100: #f6e7c6;  --seam-50:  #fbf3df;
+
+  --apex-700: #8a3318;  --apex-600: #a5421f;  --apex-500: #b85130;
+  --apex-300: #d98a6e;  --apex-100: #f4ddd1;  --apex-50:  #faeae1;
+
+  /* Accent */
+  --accent-600: #1f6f63;  --accent-500: #2a8576;  --accent-100: #d4e8e3;
+
+  /* Semantic — surfaces */
+  --bg:              var(--sand-50);
+  --surface-sunken:  var(--sand-100);
+  --surface-card:    var(--paper);
+  --surface-raised:  #ffffff;
+  --surface-ink:     var(--rock-900);
+  --surface-ink-2:   var(--rock-800);
+
+  /* Semantic — text */
+  --text-strong:       var(--rock-900);
+  --text-body:         #483a2c;
+  --text-muted:        #8a7a64;
+  --text-faint:        #b2a288;
+  --text-inverse:      var(--sand-50);
+  --text-on-ink-muted: #b8a98f;
+
+  /* Semantic — borders */
+  --border:        #e6d8be;
+  --border-soft:   #efe4cf;
+  --border-strong: var(--rock-900);
+  --border-ink:    #3a2c1f;
+
+  /* Semantic — states */
+  --positive:    var(--core-600);   --positive-bg: var(--core-50);
+  --warning:     var(--seam-600);   --warning-bg:  var(--seam-50);
+  --danger:      var(--apex-600);   --danger-bg:   var(--apex-50);
+
+  /* Brand mark strata */
+  --strata-gold:  #d9a96b;
+  --strata-brown: #5c3318;
+  --strata-amber: #a06828;
+  --strata-line:  #1a1714;
 }
 
+/* ============================================================
+   SHALE — Typography tokens
+   ============================================================ */
+:root {
+  --font-serif: 'Spectral', Georgia, 'Times New Roman', serif;
+  --font-sans:  'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:  var(--font-geist-mono), 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --text-2xs: 11px;  --text-xs: 12px;  --text-sm: 13px;  --text-base: 15px;
+  --text-md:  17px;  --text-lg: 20px;  --text-xl: 25px;  --text-2xl: 32px;
+  --text-3xl: 42px;  --text-4xl: 56px; --text-5xl: 72px; --text-6xl: 92px;
+
+  --fw-regular: 400;  --fw-medium: 500;  --fw-semibold: 600;
+  --fw-bold: 700;     --fw-black: 800;
+
+  --lh-tight: 1.04;  --lh-snug: 1.18;  --lh-normal: 1.45;  --lh-relaxed: 1.62;
+
+  --ls-tighter: -0.03em;  --ls-tight: -0.015em;  --ls-normal: 0;
+  --ls-wide: 0.04em;      --ls-wider: 0.14em;    --ls-widest: 0.22em;
+
+  --role-display: var(--fw-bold) var(--text-5xl)/var(--lh-tight) var(--font-serif);
+  --role-h1:      var(--fw-bold) var(--text-3xl)/var(--lh-snug)  var(--font-serif);
+  --role-h2:      var(--fw-semibold) var(--text-2xl)/var(--lh-snug) var(--font-serif);
+  --role-h3:      var(--fw-semibold) var(--text-lg)/var(--lh-snug)  var(--font-sans);
+  --role-body:    var(--fw-regular) var(--text-base)/var(--lh-relaxed) var(--font-sans);
+  --role-label:   var(--fw-semibold) var(--text-xs)/var(--lh-normal)  var(--font-sans);
+  --role-metric:  var(--fw-medium) var(--text-2xl)/var(--lh-tight) var(--font-mono);
+}
+
+/* ============================================================
+   SHALE — Spacing, radius, shadow, motion tokens
+   ============================================================ */
+:root {
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px;  --space-6: 24px;  --space-8: 32px;  --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-20: 80px; --space-24: 96px;
+
+  --r-xs: 4px;  --r-sm: 7px;  --r-md: 11px; --r-lg: 16px;
+  --r-xl: 22px; --r-2xl: 30px; --r-pill: 999px;
+
+  --border-w: 1px;  --border-w-2: 1.5px;
+  --hairline: 1px solid var(--border);
+
+  --shadow-xs: 0 1px 2px rgba(26,23,20,0.05);
+  --shadow-sm: 0 2px 6px -2px rgba(26,23,20,0.10);
+  --shadow-md: 0 8px 22px -8px rgba(26,23,20,0.16);
+  --shadow-lg: 0 18px 40px -12px rgba(26,23,20,0.22);
+  --shadow-xl: 0 32px 64px -20px rgba(26,23,20,0.28);
+  --shadow-inset: inset 0 1px 0 rgba(255,253,247,0.6);
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;  --dur-base: 220ms;  --dur-slow: 420ms;
+
+  --container: 1120px;  --container-sm: 720px;  --nav-h: 64px;
+}
+
+/* ============================================================
+   Tailwind v4 — @theme (Tailwind utility aliases)
+   ============================================================ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Neutrals */
+  --color-rock-950: #120f0c;
+  --color-rock-900: #1a1714;
+  --color-rock-800: #271f18;
+  --color-rock-700: #3a2c1f;
+  --color-rock-600: #5c3318;
+  --color-rock-500: #7c4a22;
+  --color-rock-400: #a06828;
+  --color-rock-300: #c08a45;
+  --color-rock-200: #d9a96b;
+  --color-rock-100: #efe0c8;
+  --color-sand-100: #f0e7d6;
+  --color-sand-75:  #f5efe3;
+  --color-sand-50:  #f9f4ea;
+  --color-paper:    #fdfaf3;
+
+  /* Tier accents */
+  --color-core:     #5e743d;
+  --color-core-700: #3a4a26;
+  --color-core-600: #4c5f31;
+  --color-core-300: #95a96d;
+  --color-core-100: #e7ecd7;
+  --color-core-50:  #f1f4e7;
+
+  --color-seam:     #c2862a;
+  --color-seam-700: #8a5a16;
+  --color-seam-600: #a87320;
+  --color-seam-300: #e0b061;
+  --color-seam-100: #f6e7c6;
+  --color-seam-50:  #fbf3df;
+
+  --color-apex:     #b85130;
+  --color-apex-700: #8a3318;
+  --color-apex-600: #a5421f;
+  --color-apex-300: #d98a6e;
+  --color-apex-100: #f4ddd1;
+  --color-apex-50:  #faeae1;
+
+  --color-accent:     #2a8576;
+  --color-accent-600: #1f6f63;
+  --color-accent-100: #d4e8e3;
+
+  /* Semantic */
+  --color-bg:           var(--sand-50);
+  --color-surface-card: var(--paper);
+  --color-surface-ink:  var(--rock-900);
+  --color-border:       #e6d8be;
+
+  /* Fonts */
+  --font-serif: 'Spectral', Georgia, serif;
+  --font-sans:  'Hanken Grotesk', system-ui, sans-serif;
+  --font-mono:  var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ============================================================
+   SHALE — Base layer & brand motifs
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-body);
+  font: var(--role-body);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 { margin: 0; color: var(--text-strong); }
+p  { margin: 0; text-wrap: pretty; }
+a  { color: var(--accent-600); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::selection { background: var(--rock-200); color: var(--rock-900); }
+
+.mono, [class*="font-mono"] { font-variant-numeric: tabular-nums; }
+
+/* Eyebrow / overline label */
+.shale-eyebrow {
+  font: var(--fw-semibold) var(--text-2xs)/1 var(--font-sans);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Strata motif — diagonal sedimentary banding */
+.shale-strata {
+  background:
+    linear-gradient(110deg, var(--strata-line) 0 1.5px, transparent 1.5px) 0 0/100% 100% no-repeat,
+    linear-gradient(
+      163deg,
+      var(--strata-gold) 0%, var(--strata-gold) 30%,
+      var(--strata-line) 30%, var(--strata-line) 31.2%,
+      var(--strata-brown) 31.2%, var(--strata-brown) 64%,
+      var(--strata-line) 64%, var(--strata-line) 65.2%,
+      var(--strata-amber) 65.2%, var(--strata-amber) 100%
+    );
+}
+
+/* Subtle dark surface with faint strata bands */
+.shale-strata-soft {
+  background-color: var(--surface-ink);
+  background-image:
+    repeating-linear-gradient(
+      163deg,
+      rgba(217,169,107,0.00) 0px, rgba(217,169,107,0.00) 26px,
+      rgba(217,169,107,0.06) 26px, rgba(217,169,107,0.06) 27px,
+      rgba(160,104,40,0.05)  27px, rgba(160,104,40,0.05)  54px,
+      rgba(217,169,107,0.07) 54px, rgba(217,169,107,0.07) 55px
+    );
+}
+
+/* Sandstone texture — faint warm speckle */
+.shale-sandstone {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(160,104,40,0.04) 0, transparent 38%),
+    radial-gradient(circle at 80% 70%, rgba(92,51,24,0.035) 0, transparent 42%);
 }
