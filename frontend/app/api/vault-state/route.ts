@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { createPublicClient, http, parseAbi } from "viem";
 import { arbitrumSepolia } from "viem/chains";
 
-const VAULT     = process.env.NEXT_PUBLIC_VAULT_ADDRESS   as `0x${string}`;
-const GOVERNOR  = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS as `0x${string}`;
-const STRATEGY  = process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS as `0x${string}`;
-const RPC       = process.env.ARBITRUM_SEPOLIA_RPC!;
+const VAULT     = (process.env.NEXT_PUBLIC_VAULT_ADDRESS            ?? "0x3989a0E6450903f60Aa42A82fF1C9c44C24622DC") as `0x${string}`;
+const GOVERNOR  = (process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS         ?? "0xc21DAf89edAeBb9B6def2F71b4d5bd71e9AC23F1") as `0x${string}`;
+const STRATEGY  = (process.env.NEXT_PUBLIC_STRATEGY_ROUTER_ADDRESS  ?? "0x27d0f024c1aE225aFA4366319a9F9F9e63B4610b") as `0x${string}`;
+const RPC       = process.env.ARBITRUM_SEPOLIA_RPC ?? "https://sepolia-rollup.arbitrum.io/rpc";
 
 const VAULT_ABI = parseAbi([
   "function corePrincipal() view returns (uint256)",

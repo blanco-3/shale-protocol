@@ -30,6 +30,7 @@ export default function Dashboard() {
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMinBps" },
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "seamTargetMaxBps" },
       { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "epochCount" },
+      { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "minApexBufferBps" },
     ],
   });
 
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const corePrincipal = r(0), seamPrincipal = r(1), apexPrincipal = r(2);
   const coreMin = r(3), coreMax = r(4), seamMin = r(5), seamMax = r(6);
   const epochCount = r(7);
+  const minApexBufferBps = r(8);
 
   const totalTVL = corePrincipal + seamPrincipal + apexPrincipal;
   const loading = vaultData === undefined;
@@ -97,28 +99,20 @@ export default function Dashboard() {
 
       {/* Stats bar */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
-        <Card pad="md">
-          <StatTile label="Total TVL" value={loading ? "—" : formatUsdc(totalTVL)} sub="principal" />
+        <Card pad="sm">
+          <StatTile size="sm" label="Total TVL" value={loading ? "—" : formatUsdc(totalTVL)} sub="principal" />
         </Card>
-        <Card pad="md">
-          <StatTile label="CORE APY" value={`${bpsToPercent(coreMin)}–${bpsToPercent(coreMax)}`} sub="target" />
+        <Card pad="sm">
+          <StatTile size="sm" label="Blended APY" value={blendedDisplay} sub="weighted avg" />
         </Card>
-        <Card pad="md">
-          <StatTile label="SEAM APY" value={`${bpsToPercent(seamMin)}–${bpsToPercent(seamMax)}`} sub="target" />
+        <Card pad="sm">
+          <StatTile size="sm" label="APEX Buffer" value={`${apexBufferPct}%`} sub={`min ${bpsToPercent(minApexBufferBps)}`} />
         </Card>
-        <Card pad="md">
-          <StatTile
-            label="APEX APY"
-            value={apexRealized
-              ? apexRealized
-              : apexConservative && apexOptimistic
-              ? `${apexConservative}–${apexOptimistic}`
-              : "—"}
-            sub={apexLeverage ? `${apexLeverage} leverage` : "leveraged"}
-          />
+        <Card pad="sm">
+          <StatTile size="sm" label="Epoch" value={loading ? "—" : `#${epochCount.toString()}`} sub="settled" />
         </Card>
-        <Card pad="md">
-          <StatTile label="Epoch" value={loading ? "—" : `#${epochCount.toString()}`} sub="settled" />
+        <Card pad="sm">
+          <StatTile size="sm" label="Strategies" value="3" sub="Aave · Camelot · Morpho" />
         </Card>
       </div>
 
