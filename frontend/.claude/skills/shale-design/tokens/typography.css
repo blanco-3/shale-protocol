@@ -1,0 +1,61 @@
+/* ============================================================
+   SHALE — Typography tokens
+   ------------------------------------------------------------
+   Three voices:
+     · Serif (Spectral)     — display, headlines, the wordmark.
+                              Editorial gravitas, "geology field guide".
+     · Sans  (Hanken)       — UI labels, body copy, descriptions.
+     · Mono  (JetBrains)    — every number: APY, $ amounts, bps,
+                              addresses, tx hashes. Financial precision.
+   ============================================================ */
+
+:root {
+  /* ---- Families ---- */
+  --font-serif: 'Spectral', Georgia, 'Times New Roman', serif;
+  --font-sans:  'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:  'JetBrains Mono', 'SFMono-Regular', ui-monospace, Menlo, monospace;
+
+  /* ---- Type scale (1.25 major-third-ish, tuned) ---- */
+  --text-2xs:  11px;
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-md:   17px;
+  --text-lg:   20px;
+  --text-xl:   25px;
+  --text-2xl:  32px;
+  --text-3xl:  42px;
+  --text-4xl:  56px;
+  --text-5xl:  72px;
+  --text-6xl:  92px;
+
+  /* ---- Weights ---- */
+  --fw-regular:  400;  /* @kind font */
+  --fw-medium:   500;  /* @kind font */
+  --fw-semibold: 600;  /* @kind font */
+  --fw-bold:     700;  /* @kind font */
+  --fw-black:    800;  /* @kind font */
+
+  /* ---- Line heights ---- */
+  --lh-tight:   1.04;  /* @kind font */
+  --lh-snug:    1.18;  /* @kind font */
+  --lh-normal:  1.45;  /* @kind font */
+  --lh-relaxed: 1.62;  /* @kind font */
+
+  /* ---- Letter spacing ---- */
+  --ls-tighter: -0.03em;   /* @kind font */   /* serif display */
+  --ls-tight:   -0.015em;  /* @kind font */
+  --ls-normal:  0;         /* @kind font */
+  --ls-wide:    0.04em;    /* @kind font */
+  --ls-wider:   0.14em;    /* @kind font */   /* eyebrow / overline labels */
+  --ls-widest:  0.22em;    /* @kind font */   /* SHALE wordmark tracking */
+
+  /* ---- Semantic roles ---- */
+  --role-display:  var(--fw-bold) var(--text-5xl)/var(--lh-tight) var(--font-serif);
+  --role-h1:       var(--fw-bold) var(--text-3xl)/var(--lh-snug)  var(--font-serif);
+  --role-h2:       var(--fw-semibold) var(--text-2xl)/var(--lh-snug) var(--font-serif);
+  --role-h3:       var(--fw-semibold) var(--text-lg)/var(--lh-snug) var(--font-sans);
+  --role-body:     var(--fw-regular) var(--text-base)/var(--lh-relaxed) var(--font-sans);
+  --role-label:    var(--fw-semibold) var(--text-xs)/var(--lh-normal) var(--font-sans);
+  --role-metric:   var(--fw-medium) var(--text-2xl)/var(--lh-tight) var(--font-mono);
+}

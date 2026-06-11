@@ -1,0 +1,22 @@
+<!-- @dsCard group="Spacing" viewport="700x210" name="Elevation" subtitle="Warm bedrock-tinted shadows — sediment on sandstone" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--bg); padding: 30px 28px; font-family: var(--font-sans); display:flex; gap:26px; align-items:center; }
+  .u { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .card { width: 96px; height: 70px; background: var(--surface-raised); border-radius: var(--r-lg); }
+  .tok { font: 10px/1.4 var(--font-mono); color: var(--text-muted); text-align:center; }
+  .tok b { display:block; font: var(--fw-semibold) 11px/1 var(--font-sans); color: var(--text-strong); margin-bottom:3px; }
+</style>
+</head>
+<body>
+  <div class="u"><div class="card" style="box-shadow:var(--shadow-xs)"></div><div class="tok"><b>xs</b>hairline lift</div></div>
+  <div class="u"><div class="card" style="box-shadow:var(--shadow-sm)"></div><div class="tok"><b>sm</b>resting card</div></div>
+  <div class="u"><div class="card" style="box-shadow:var(--shadow-md)"></div><div class="tok"><b>md</b>raised / hover</div></div>
+  <div class="u"><div class="card" style="box-shadow:var(--shadow-lg)"></div><div class="tok"><b>lg</b>popover</div></div>
+  <div class="u"><div class="card" style="box-shadow:var(--shadow-xl)"></div><div class="tok"><b>xl</b>modal</div></div>
+</body>
+</html>

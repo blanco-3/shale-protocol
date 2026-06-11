@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #111;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 60px;
+    padding: 60px 40px;
+    font-family: 'Courier New', monospace;
+  }
+  .col { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .lbl { color:#444; font-size:10px; letter-spacing:4px; text-transform:uppercase; }
+  .row { display:flex; gap:24px; align-items:center; }
+</style>
+</head>
+<body>
+
+<!--
+  핵심 수정:
+  1. 층 비율: 세 층 면적 균일하게
+     - Line 1: 왼벽 y=60  → 오른벽 y=230   (기울기 170/512 = ~18도)
+     - Line 2: 왼벽 y=280 → 오른벽 y=450
+     → 층 높이 왼쪽: 60 / 220 / 232  오른쪽: 230 / 220 / 62
+       면적은 세 층 거의 동일
+
+  2. 대각선 끝 모서리 제거:
+     - line 좌표를 -100 ~ 612 로 화면 밖까지 연장
+     - clipPath가 512x512 사각형이므로 밖으로 나간 부분은 잘림
+     - polygon도 -100 / 612 좌표로 넉넉하게
+-->
+
+<!-- MAIN 512px -->
+<div class="col">
+<svg width="256" height="256" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="sq">
+      <rect width="512" height="512" rx="72"/>
+    </clipPath>
+  </defs>
+
+  <rect width="512" height="512" rx="72" fill="#1a1714"/>
+
+  <g clip-path="url(#sq)">
+
+    <!-- Layer 1 · 상단 · sandy gold -->
+    <polygon points="-100,-100  612,-100  612,230  -100,60"
+      fill="#d9a96b"/>
+
+    <!-- Layer 2 · 중단 · dark brown -->
+    <polygon points="-100,60  612,230  612,450  -100,280"
+      fill="#5c3318"/>
+
+    <!-- Layer 3 · 하단 · warm amber -->
+    <polygon points="-100,280  612,450  612,612  -100,612"
+      fill="#a06828"/>
+
+    <!-- 경계선 1: 화면 밖까지 연장 -->
+    <line x1="-100" y1="60"  x2="612" y2="230"
+      stroke="#1a1714" stroke-width="22"/>
+
+    <!-- 경계선 2: 화면 밖까지 연장 -->
+    <line x1="-100" y1="280" x2="612" y2="450"
+      stroke="#1a1714" stroke-width="22"/>
+
+  </g>
+</svg>
+<div class="lbl">icon · 512</div>
+</div>
+
+
+<!-- SIZE SCALE -->
+<div class="col">
+<div class="lbl">sizes</div>
+<div class="row">
+
+  <div class="col">
+  <svg width="128" height="128" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="sq2"><rect width="512" height="512" rx="72"/></clipPath></defs>
+    <rect width="512" height="512" rx="72" fill="#1a1714"/>
+    <g clip-path="url(#sq2)">
+      <polygon points="-100,-100  612,-100  612,230  -100,60"  fill="#d9a96b"/>
+      <polygon points="-100,60  612,230  612,450  -100,280"    fill="#5c3318"/>
+      <polygon points="-100,280  612,450  612,612  -100,612"   fill="#a06828"/>
+      <line x1="-100" y1="60"  x2="612" y2="230" stroke="#1a1714" stroke-width="22"/>
+      <line x1="-100" y1="280" x2="612" y2="450" stroke="#1a1714" stroke-width="22"/>
+    </g>
+  </svg>
+  <div class="lbl">128</div>
+  </div>
+
+  <div class="col">
+  <svg width="64" height="64" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="sq3"><rect width="512" height="512" rx="72"/></clipPath></defs>
+    <rect width="512" height="512" rx="72" fill="#1a1714"/>
+    <g clip-path="url(#sq3)">
+      <polygon points="-100,-100  612,-100  612,230  -100,60"  fill="#d9a96b"/>
+      <polygon points="-100,60  612,230  612,450  -100,280"    fill="#5c3318"/>
+      <polygon points="-100,280  612,450  612,612  -100,612"   fill="#a06828"/>
+      <line x1="-100" y1="60"  x2="612" y2="230" stroke="#1a1714" stroke-width="22"/>
+      <line x1="-100" y1="280" x2="612" y2="450" stroke="#1a1714" stroke-width="22"/>
+    </g>
+  </svg>
+  <div class="lbl">64</div>
+  </div>
+
+  <div class="col">
+  <svg width="32" height="32" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="sq4"><rect width="512" height="512" rx="72"/></clipPath></defs>
+    <rect width="512" height="512" rx="72" fill="#1a1714"/>
+    <g clip-path="url(#sq4)">
+      <polygon points="-100,-100  612,-100  612,230  -100,60"  fill="#d9a96b"/>
+      <polygon points="-100,60  612,230  612,450  -100,280"    fill="#5c3318"/>
+      <polygon points="-100,280  612,450  612,612  -100,612"   fill="#a06828"/>
+      <line x1="-100" y1="60"  x2="612" y2="230" stroke="#1a1714" stroke-width="24"/>
+      <line x1="-100" y1="280" x2="612" y2="450" stroke="#1a1714" stroke-width="24"/>
+    </g>
+  </svg>
+  <div class="lbl">fav</div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- WORDMARK -->
+<div class="col">
+<div class="lbl">wordmark</div>
+<svg width="480" height="100" viewBox="0 0 960 200" xmlns="http://www.w3.org/2000/svg">
+  <defs><clipPath id="sqWM"><rect width="200" height="200" rx="28"/></clipPath></defs>
+  <rect width="200" height="200" rx="28" fill="#1a1714"/>
+  <g clip-path="url(#sqWM)">
+    <polygon points="-40,-40  240,-40  240,90  -40,23"   fill="#d9a96b"/>
+    <polygon points="-40,23  240,90  240,175  -40,109"   fill="#5c3318"/>
+    <polygon points="-40,109  240,175  240,240  -40,240" fill="#a06828"/>
+    <line x1="-40" y1="23"  x2="240" y2="90"  stroke="#1a1714" stroke-width="9"/>
+    <line x1="-40" y1="109" x2="240" y2="175" stroke="#1a1714" stroke-width="9"/>
+  </g>
+  <text x="228" y="152"
+    font-family="Georgia, serif"
+    font-size="114"
+    font-weight="700"
+    fill="#d9a96b"
+    letter-spacing="-2">shale</text>
+</svg>
+</div>
+
+
+<!-- ON WHITE -->
+<div class="col">
+<div class="lbl">on white</div>
+<div style="background:#fff; padding:20px; border-radius:16px;">
+<svg width="96" height="96" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs><clipPath id="sqLt"><rect width="512" height="512" rx="72"/></clipPath></defs>
+  <rect width="512" height="512" rx="72" fill="#1a1714"/>
+  <g clip-path="url(#sqLt)">
+    <polygon points="-100,-100  612,-100  612,230  -100,60"  fill="#d9a96b"/>
+    <polygon points="-100,60  612,230  612,450  -100,280"    fill="#5c3318"/>
+    <polygon points="-100,280  612,450  612,612  -100,612"   fill="#a06828"/>
+    <line x1="-100" y1="60"  x2="612" y2="230" stroke="#1a1714" stroke-width="22"/>
+    <line x1="-100" y1="280" x2="612" y2="450" stroke="#1a1714" stroke-width="22"/>
+  </g>
+</svg>
+</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!-- @dsCard group="Brand" viewport="700x190" name="Wordmark lockup" subtitle="Mark + serif wordmark, light and inverse" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-card); padding: 26px 28px; font-family: var(--font-serif); }
+  .stack { display:flex; flex-direction:column; gap:16px; }
+  .lockup { display:flex; align-items:center; gap:14px; padding: 16px 20px; border-radius: var(--r-lg); }
+  .word { font: var(--fw-bold) 38px/1 var(--font-serif); letter-spacing:-0.02em; }
+  .word.caps { font-family: var(--font-sans); font-weight:800; letter-spacing:.22em; font-size:24px; text-transform:uppercase; }
+  .tag { font: var(--fw-medium) 11px/1 var(--font-sans); letter-spacing:.14em; text-transform:uppercase; color: var(--text-faint); margin-left:auto; }
+</style>
+</head>
+<body>
+  <div class="stack">
+    <div class="lockup" style="background:var(--bg)">
+      <img src="../assets/shale-mark.svg" width="52" height="52" alt="">
+      <span class="word" style="color:var(--rock-600)">shale</span>
+      <span class="tag">serif lockup</span>
+    </div>
+    <div class="lockup" style="background:var(--surface-ink)">
+      <img src="../assets/shale-mark.svg" width="40" height="40" alt="">
+      <span class="word caps" style="color:var(--rock-200)">SHALE</span>
+      <span class="tag" style="color:var(--text-on-ink-muted)">nav lockup · tracked caps</span>
+    </div>
+  </div>
+</body>
+</html>

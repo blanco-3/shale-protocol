@@ -1,0 +1,99 @@
+/* ============================================================
+   SHALE — Color tokens
+   ------------------------------------------------------------
+   A warm sedimentary palette lifted straight from the brand mark:
+   three diagonal rock strata (sandy gold / dark brown / warm amber)
+   over a near-black bedrock. Everything is earth — no cool grays.
+
+   Layered model:
+     1. Rock scale  (--rock-*)  : the bedrock-to-sand neutral ramp
+     2. Tier accents            : CORE / SEAM / APEX as strata colors
+     3. Semantic aliases        : surfaces, text, borders, states
+   ============================================================ */
+
+:root {
+  /* ---- Rock scale : bedrock → sand (the brand neutral ramp) ---- */
+  --rock-950: #120f0c;
+  --rock-900: #1a1714;   /* bedrock — logo background + separators */
+  --rock-800: #271f18;
+  --rock-700: #3a2c1f;
+  --rock-600: #5c3318;   /* dark-brown strata (logo layer 2) */
+  --rock-500: #7c4a22;
+  --rock-400: #a06828;   /* warm-amber strata (logo layer 3) */
+  --rock-300: #c08a45;
+  --rock-200: #d9a96b;   /* sandy-gold strata (logo layer 1) */
+  --rock-150: #e7cda0;
+  --rock-100: #efe0c8;
+  --sand-100: #f0e7d6;
+  --sand-75:  #f5efe3;
+  --sand-50:  #f9f4ea;   /* primary app background — sandstone paper */
+  --paper:    #fdfaf3;   /* raised card paper */
+
+  /* ---- Tier accents : the three tranches as rock strata ---- */
+  /* CORE — deepest, protected bedrock → sediment moss green */
+  --core-700: #3a4a26;
+  --core-600: #4c5f31;
+  --core-500: #5e743d;   /* CORE base */
+  --core-300: #95a96d;
+  --core-100: #e7ecd7;
+  --core-50:  #f1f4e7;
+
+  /* SEAM — the mezzanine coal/ochre seam → amber gold */
+  --seam-700: #8a5a16;
+  --seam-600: #a87320;
+  --seam-500: #c2862a;   /* SEAM base */
+  --seam-300: #e0b061;
+  --seam-100: #f6e7c6;
+  --seam-50:  #fbf3df;
+
+  /* APEX — exposed surface, weathered first → terracotta rust */
+  --apex-700: #8a3318;
+  --apex-600: #a5421f;
+  --apex-500: #b85130;   /* APEX base */
+  --apex-300: #d98a6e;
+  --apex-100: #f4ddd1;
+  --apex-50:  #faeae1;
+
+  /* ---- Accent : protocol-wide highlight (oxidized copper-teal) ---- */
+  /* A single cool note used sparingly for links/active focus so the
+     all-earth palette has one point of contrast. */
+  --accent-600: #1f6f63;
+  --accent-500: #2a8576;
+  --accent-100: #d4e8e3;
+
+  /* ---- Semantic : surfaces ---- */
+  --bg:             var(--sand-50);
+  --surface-sunken: var(--sand-100);
+  --surface-card:   var(--paper);
+  --surface-raised: #ffffff;
+  --surface-ink:    var(--rock-900);   /* dark feature sections */
+  --surface-ink-2:  var(--rock-800);
+
+  /* ---- Semantic : text ---- */
+  --text-strong:  var(--rock-900);
+  --text-body:    #483a2c;
+  --text-muted:   #8a7a64;
+  --text-faint:   #b2a288;
+  --text-inverse: var(--sand-50);
+  --text-on-ink-muted: #b8a98f;
+
+  /* ---- Semantic : borders ---- */
+  --border:        #e6d8be;
+  --border-soft:   #efe4cf;
+  --border-strong: var(--rock-900);
+  --border-ink:    #3a2c1f;   /* hairlines inside dark sections */
+
+  /* ---- Semantic : states (earthy) ---- */
+  --positive:   var(--core-600);
+  --positive-bg:var(--core-50);
+  --warning:    var(--seam-600);
+  --warning-bg: var(--seam-50);
+  --danger:     var(--apex-600);
+  --danger-bg:  var(--apex-50);
+
+  /* ---- Brand mark literals (for inline strata illustration) ---- */
+  --strata-gold:  #d9a96b;
+  --strata-brown: #5c3318;
+  --strata-amber: #a06828;
+  --strata-line:  #1a1714;
+}

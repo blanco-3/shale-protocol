@@ -1,0 +1,15 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="sq">
+      <rect width="512" height="512" rx="72"></rect>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" rx="72" fill="#1a1714"></rect>
+  <g clip-path="url(#sq)">
+    <polygon points="-100,-100  612,-100  612,230  -100,60" fill="#d9a96b"></polygon>
+    <polygon points="-100,60  612,230  612,450  -100,280" fill="#5c3318"></polygon>
+    <polygon points="-100,280  612,450  612,612  -100,612" fill="#a06828"></polygon>
+    <line x1="-100" y1="60" x2="612" y2="230" stroke="#1a1714" stroke-width="22"></line>
+    <line x1="-100" y1="280" x2="612" y2="450" stroke="#1a1714" stroke-width="22"></line>
+  </g>
+</svg>

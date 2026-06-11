@@ -1,0 +1,61 @@
+/* ============================================================
+   SHALE — Spacing, radius, shadow, motion tokens
+   ------------------------------------------------------------
+   4px base grid. Radii echo the brand mark's rounded square
+   (rx 72 / 512 ≈ 14%). Shadows are warm — tinted with bedrock
+   brown, never neutral gray — so cards read as sediment resting
+   on sandstone, not paper on white.
+   ============================================================ */
+
+:root {
+  /* ---- Spacing (4px base) ---- */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* ---- Radius (echoes the 14% rounded brand square) ---- */
+  --r-xs:   4px;
+  --r-sm:   7px;
+  --r-md:   11px;
+  --r-lg:   16px;
+  --r-xl:   22px;
+  --r-2xl:  30px;
+  --r-pill: 999px;
+
+  /* ---- Borders ---- */
+  --border-w:    1px;
+  --border-w-2:  1.5px;
+  --hairline:    1px solid var(--border);
+
+  /* ---- Shadows — warm, bedrock-tinted ---- */
+  --shadow-xs: 0 1px 2px rgba(26, 23, 20, 0.05);
+  --shadow-sm: 0 2px 6px -2px rgba(26, 23, 20, 0.10);
+  --shadow-md: 0 8px 22px -8px rgba(26, 23, 20, 0.16);
+  --shadow-lg: 0 18px 40px -12px rgba(26, 23, 20, 0.22);
+  --shadow-xl: 0 32px 64px -20px rgba(26, 23, 20, 0.28);
+  /* inset "core sample" line used on stat tiles & wells */
+  --shadow-inset: inset 0 1px 0 rgba(255, 253, 247, 0.6);
+
+  /* ---- Motion — geological calm: slow, weighted, no bounce ---- */
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);     /* @kind other */
+  --ease-in-out:cubic-bezier(0.65, 0, 0.35, 1);    /* @kind other */
+  --dur-fast:   120ms;   /* @kind other */
+  --dur-base:   220ms;   /* @kind other */
+  --dur-slow:   420ms;   /* @kind other */
+
+  /* ---- Layout ---- */
+  --container:    1120px;
+  --container-sm: 720px;
+  --nav-h:        64px;
+}

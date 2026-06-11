@@ -1,0 +1,34 @@
+<!-- @dsCard group="Colors" viewport="700x250" name="Tier strata" subtitle="CORE / SEAM / APEX tranches as sedimentary layers" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-card); padding: 22px 24px; font-family: var(--font-sans); }
+  .strata { display: flex; flex-direction: column; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-md); }
+  .layer { padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid var(--rock-900); }
+  .layer:last-child { border-bottom: 0; }
+  .name { font: var(--fw-bold) 17px/1 var(--font-sans); letter-spacing: .02em; }
+  .desc { font: 11px/1 var(--font-sans); opacity: .82; margin-top: 5px; }
+  .pos { font: var(--fw-medium) 11px/1 var(--font-mono); opacity: .9; }
+  .hex { font: 10px/1 var(--font-mono); opacity: .7; margin-top:4px; text-align:right; }
+</style>
+</head>
+<body>
+  <div class="strata">
+    <div class="layer" style="background:var(--apex-100);color:var(--apex-700)">
+      <div><div class="name">APEX</div><div class="desc">Exposed surface · first-loss · leveraged residual</div></div>
+      <div style="text-align:right"><div class="pos">① first</div><div class="hex">#b85130</div></div>
+    </div>
+    <div class="layer" style="background:var(--seam-100);color:var(--seam-700)">
+      <div><div class="name">SEAM</div><div class="desc">Mezzanine seam · second-loss · balanced yield</div></div>
+      <div style="text-align:right"><div class="pos">② second</div><div class="hex">#c2862a</div></div>
+    </div>
+    <div class="layer" style="background:var(--core-100);color:var(--core-700)">
+      <div><div class="name">CORE</div><div class="desc">Protected bedrock · last-loss · guaranteed APY</div></div>
+      <div style="text-align:right"><div class="pos">③ last</div><div class="hex">#5e743d</div></div>
+    </div>
+  </div>
+</body>
+</html>

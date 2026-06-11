@@ -1,0 +1,30 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Spacing scale" subtitle="4px base grid — geological strata rhythm" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-card); padding: 26px 28px; font-family: var(--font-sans); }
+  .scale { display:flex; align-items:flex-end; gap:14px; }
+  .u { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .bar { background: var(--rock-400); border-radius: 2px; width: 100%; }
+  .u .box { display:flex; align-items:flex-end; height: 64px; }
+  .u .blk { background: var(--rock-300); border-radius: var(--r-xs); }
+  .tok { font: 10px/1 var(--font-mono); color: var(--text-muted); }
+  .px { font: var(--fw-semibold) 11px/1 var(--font-sans); color: var(--text-strong); }
+</style>
+</head>
+<body>
+  <div class="scale">
+    <div class="u"><div class="box"><div class="blk" style="width:4px;height:4px"></div></div><div class="px">4</div><div class="tok">1</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:8px;height:8px"></div></div><div class="px">8</div><div class="tok">2</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:12px;height:12px"></div></div><div class="px">12</div><div class="tok">3</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:16px;height:16px"></div></div><div class="px">16</div><div class="tok">4</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:24px;height:24px"></div></div><div class="px">24</div><div class="tok">6</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:32px;height:32px"></div></div><div class="px">32</div><div class="tok">8</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:48px;height:48px"></div></div><div class="px">48</div><div class="tok">12</div></div>
+    <div class="u"><div class="box"><div class="blk" style="width:64px;height:64px"></div></div><div class="px">64</div><div class="tok">16</div></div>
+  </div>
+</body>
+</html>

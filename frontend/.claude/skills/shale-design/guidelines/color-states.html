@@ -1,0 +1,36 @@
+<!-- @dsCard group="Colors" viewport="700x170" name="State colors" subtitle="Earthy semantic states — positive, warning, danger" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-card); padding: 24px; font-family: var(--font-sans); display:flex; gap:14px; }
+  .state { flex:1; border-radius: var(--r-md); padding: 16px; }
+  .dot { width:12px; height:12px; border-radius:var(--r-pill); margin-bottom:12px; }
+  .t { font: var(--fw-bold) 13px/1 var(--font-sans); margin-bottom:5px; }
+  .h { font: 10px/1 var(--font-mono); opacity:.75; }
+  .d { font: 11px/1.4 var(--font-sans); margin-top:8px; opacity:.85; }
+</style>
+</head>
+<body>
+  <div class="state" style="background:var(--positive-bg)">
+    <div class="dot" style="background:var(--positive)"></div>
+    <div class="t" style="color:var(--positive)">Positive</div>
+    <div class="h" style="color:var(--positive)">--positive #4c5f31</div>
+    <div class="d" style="color:var(--core-700)">Yield, healthy buffer, confirmed tx</div>
+  </div>
+  <div class="state" style="background:var(--warning-bg)">
+    <div class="dot" style="background:var(--warning)"></div>
+    <div class="t" style="color:var(--warning)">Warning</div>
+    <div class="h" style="color:var(--warning)">--warning #a87320</div>
+    <div class="d" style="color:var(--seam-700)">Caution buffer, drift, pending</div>
+  </div>
+  <div class="state" style="background:var(--danger-bg)">
+    <div class="dot" style="background:var(--danger)"></div>
+    <div class="t" style="color:var(--danger)">Danger</div>
+    <div class="h" style="color:var(--danger)">--danger #a5421f</div>
+    <div class="d" style="color:var(--apex-700)">First-loss, critical, failed tx</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+/* ============================================================
+   SHALE — Base layer & brand motifs
+   ------------------------------------------------------------
+   Element resets, document defaults, and the reusable STRATA
+   motif (diagonal sedimentary banding from the brand mark).
+   Consumers get this for free via styles.css.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-body);
+  font: var(--role-body);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 { margin: 0; color: var(--text-strong); }
+p { margin: 0; text-wrap: pretty; }
+a { color: var(--accent-600); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::selection { background: var(--rock-200); color: var(--rock-900); }
+
+/* tabular figures everywhere mono is used */
+.mono, [class*="mono"] { font-variant-numeric: tabular-nums; }
+
+/* ---- Eyebrow / overline label ---- */
+.shale-eyebrow {
+  font: var(--fw-semibold) var(--text-2xs)/1 var(--font-sans);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   STRATA MOTIF
+   The signature background: three diagonal rock bands divided
+   by bedrock hairlines, matching the logo's ~18° tilt.
+   Apply .shale-strata to any block for a sedimentary fill.
+   ============================================================ */
+.shale-strata {
+  background:
+    linear-gradient(110deg, var(--strata-line) 0 1.5px, transparent 1.5px) 0 0/100% 100% no-repeat,
+    linear-gradient(
+      163deg,
+      var(--strata-gold) 0%, var(--strata-gold) 30%,
+      var(--strata-line) 30%, var(--strata-line) 31.2%,
+      var(--strata-brown) 31.2%, var(--strata-brown) 64%,
+      var(--strata-line) 64%, var(--strata-line) 65.2%,
+      var(--strata-amber) 65.2%, var(--strata-amber) 100%
+    );
+}
+
+/* Subtle paper-grain strata for large light surfaces */
+.shale-strata-soft {
+  background-color: var(--surface-ink);
+  background-image:
+    repeating-linear-gradient(
+      163deg,
+      rgba(217,169,107,0.00) 0px,
+      rgba(217,169,107,0.00) 26px,
+      rgba(217,169,107,0.06) 26px,
+      rgba(217,169,107,0.06) 27px,
+      rgba(160,104,40,0.05) 27px,
+      rgba(160,104,40,0.05) 54px,
+      rgba(217,169,107,0.07) 54px,
+      rgba(217,169,107,0.07) 55px
+    );
+}
+
+/* Sandstone texture — faint warm speckle for app backgrounds */
+.shale-sandstone {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(160,104,40,0.04) 0, transparent 38%),
+    radial-gradient(circle at 80% 70%, rgba(92,51,24,0.035) 0, transparent 42%);
+}

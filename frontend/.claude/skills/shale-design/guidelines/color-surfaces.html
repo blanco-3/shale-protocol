@@ -1,0 +1,35 @@
+<!-- @dsCard group="Colors" viewport="700x200" name="Surfaces & text" subtitle="Sandstone surfaces and the warm text ramp" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--bg); padding: 22px 24px; font-family: var(--font-sans); display:flex; gap:16px; }
+  .col { flex:1; }
+  .surfaces { display:flex; flex-direction:column; gap:8px; }
+  .s { padding:11px 13px; border-radius: var(--r-sm); font: var(--fw-medium) 11px/1 var(--font-mono); display:flex; justify-content:space-between; align-items:center; }
+  .text-stack > div { margin-bottom: 9px; }
+  .lbl { font: var(--fw-semibold) 9px/1 var(--font-sans); letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); margin-bottom:6px; }
+</style>
+</head>
+<body>
+  <div class="col">
+    <div class="lbl">Surfaces</div>
+    <div class="surfaces">
+      <div class="s" style="background:var(--bg);box-shadow:inset 0 0 0 1px var(--border);color:var(--text-body)">bg · sandstone<span>#f9f4ea</span></div>
+      <div class="s" style="background:var(--surface-card);box-shadow:var(--shadow-sm);color:var(--text-body)">card · paper<span>#fdfaf3</span></div>
+      <div class="s" style="background:var(--surface-ink);color:var(--text-inverse)">ink · bedrock<span>#1a1714</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="lbl">Text on sandstone</div>
+    <div class="text-stack">
+      <div style="font:var(--fw-bold) 19px/1 var(--font-serif);color:var(--text-strong)">Strong — headlines</div>
+      <div style="font:400 15px/1 var(--font-sans);color:var(--text-body)">Body — paragraph copy</div>
+      <div style="font:var(--fw-medium) 13px/1 var(--font-sans);color:var(--text-muted)">Muted — secondary labels</div>
+      <div style="font:400 12px/1 var(--font-sans);color:var(--text-faint)">Faint — captions & hints</div>
+    </div>
+  </div>
+</body>
+</html>

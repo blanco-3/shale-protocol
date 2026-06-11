@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="SHALE Slides" description="Branded 16:9 slides — title, metric, and quote — in the sedimentary house style" -->
+<helmet>
+  <script src="./ds-base.js"></script>
+</helmet>
+
+<div style="display:flex; flex-direction:column; gap:28px; align-items:center; padding:28px; background:#e7d8be; font-family:var(--font-sans);">
+
+  <!-- TITLE SLIDE -->
+  <section style="position:relative; width:1280px; height:720px; flex:none; overflow:hidden; border-radius:14px; box-shadow:0 24px 60px -20px rgba(26,23,20,.5); background:#1a1714;">
+    <div style="position:absolute; inset:0; background:linear-gradient(163deg, #d9a96b 0 30%, #1a1714 30% 31.4%, #5c3318 31.4% 64%, #1a1714 64% 65.4%, #a06828 65.4% 100%); opacity:.16;"></div>
+    <div style="position:absolute; inset:0; padding:84px; display:flex; flex-direction:column; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:18px;">
+        <svg width="52" height="52" viewBox="0 0 512 512"><defs><clipPath id="t1"><rect width="512" height="512" rx="72"/></clipPath></defs><rect width="512" height="512" rx="72" fill="#1a1714"/><g clip-path="url(#t1)"><polygon points="-100,-100 612,-100 612,230 -100,60" fill="#d9a96b"/><polygon points="-100,60 612,230 612,450 -100,280" fill="#5c3318"/><polygon points="-100,280 612,450 612,612 -100,612" fill="#a06828"/><line x1="-100" y1="60" x2="612" y2="230" stroke="#1a1714" stroke-width="22"/><line x1="-100" y1="280" x2="612" y2="450" stroke="#1a1714" stroke-width="22"/></g></svg>
+        <span style="font-family:var(--font-sans); font-weight:800; font-size:24px; letter-spacing:.22em; color:#d9a96b;">SHALE</span>
+      </div>
+      <div>
+        <div style="font-family:var(--font-sans); font-weight:600; font-size:14px; letter-spacing:.16em; text-transform:uppercase; color:#a06828; margin-bottom:28px;">AI-managed yield vault · Arbitrum</div>
+        <h1 style="font-family:var(--font-serif); font-weight:700; font-size:104px; line-height:.96; letter-spacing:-.03em; color:#f9f4ea; margin:0;">Yield, <span style="font-style:italic; font-weight:600; color:#d9a96b;">stratified.</span></h1>
+        <p style="font-family:var(--font-sans); font-size:22px; line-height:1.5; color:#b8a98f; max-width:760px; margin:28px 0 0;">Three risk tiers, one sedimentary waterfall. CORE first, APEX last — losses absorbed top-down by an on-chain AI agent.</p>
+      </div>
+      <div style="font-family:var(--font-mono); font-size:15px; color:#8a7a64;">shale.protocol · Arbitrum Sepolia</div>
+    </div>
+  </section>
+
+  <!-- METRIC SLIDE -->
+  <section style="position:relative; width:1280px; height:720px; flex:none; overflow:hidden; border-radius:14px; box-shadow:0 24px 60px -20px rgba(26,23,20,.5); background:#f9f4ea; padding:84px; box-sizing:border-box;">
+    <div style="font-family:var(--font-sans); font-weight:600; font-size:14px; letter-spacing:.16em; text-transform:uppercase; color:#8a7a64; margin-bottom:14px;">Protocol at a glance</div>
+    <h2 style="font-family:var(--font-serif); font-weight:700; font-size:56px; letter-spacing:-.02em; color:#1a1714; margin:0 0 52px;">Risk, priced in layers</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:24px;">
+      <div style="position:relative; background:#fdfaf3; border:1px solid #e6d8be; border-radius:16px; padding:34px; overflow:hidden; box-shadow:0 2px 6px -2px rgba(26,23,20,.1);">
+        <div style="position:absolute; top:0; left:0; right:0; height:6px; background:repeating-linear-gradient(118deg,#5e743d 0 10px,#1a1714 10px 11px);"></div>
+        <div style="font-family:var(--font-serif); font-weight:700; font-size:30px; color:#1a1714; margin-bottom:6px;">CORE</div>
+        <div style="font-family:var(--font-mono); font-weight:500; font-size:42px; color:#4c5f31; letter-spacing:-.02em;">2.5–3.5%</div>
+        <div style="font-family:var(--font-sans); font-size:16px; color:#8a7a64; margin-top:14px;">③ last-loss · protected bedrock</div>
+      </div>
+      <div style="position:relative; background:#fdfaf3; border:1px solid #e6d8be; border-radius:16px; padding:34px; overflow:hidden; box-shadow:0 2px 6px -2px rgba(26,23,20,.1);">
+        <div style="position:absolute; top:0; left:0; right:0; height:6px; background:repeating-linear-gradient(118deg,#c2862a 0 10px,#1a1714 10px 11px);"></div>
+        <div style="font-family:var(--font-serif); font-weight:700; font-size:30px; color:#1a1714; margin-bottom:6px;">SEAM</div>
+        <div style="font-family:var(--font-mono); font-weight:500; font-size:42px; color:#a87320; letter-spacing:-.02em;">5–7%</div>
+        <div style="font-family:var(--font-sans); font-size:16px; color:#8a7a64; margin-top:14px;">② second-loss · the seam</div>
+      </div>
+      <div style="position:relative; background:#fdfaf3; border:1px solid #e6d8be; border-radius:16px; padding:34px; overflow:hidden; box-shadow:0 2px 6px -2px rgba(26,23,20,.1);">
+        <div style="position:absolute; top:0; left:0; right:0; height:6px; background:repeating-linear-gradient(118deg,#b85130 0 10px,#1a1714 10px 11px);"></div>
+        <div style="font-family:var(--font-serif); font-weight:700; font-size:30px; color:#1a1714; margin-bottom:6px;">APEX</div>
+        <div style="font-family:var(--font-mono); font-weight:500; font-size:42px; color:#a5421f; letter-spacing:-.02em;">10.2%+</div>
+        <div style="font-family:var(--font-sans); font-size:16px; color:#8a7a64; margin-top:14px;">① first-loss · leveraged residual</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:64px; margin-top:56px;">
+      <div><div style="font-family:var(--font-mono); font-weight:500; font-size:46px; color:#1a1714;">$2.48M</div><div style="font-family:var(--font-sans); font-size:15px; color:#8a7a64; margin-top:6px;">Total value locked</div></div>
+      <div><div style="font-family:var(--font-mono); font-weight:500; font-size:46px; color:#1a1714;">5.74%</div><div style="font-family:var(--font-sans); font-size:15px; color:#8a7a64; margin-top:6px;">Blended strategy APY</div></div>
+      <div><div style="font-family:var(--font-mono); font-weight:500; font-size:46px; color:#1a1714;">18.4%</div><div style="font-family:var(--font-sans); font-size:15px; color:#8a7a64; margin-top:6px;">APEX buffer</div></div>
+    </div>
+  </section>
+
+  <!-- QUOTE / SECTION SLIDE -->
+  <section style="position:relative; width:1280px; height:720px; flex:none; overflow:hidden; border-radius:14px; box-shadow:0 24px 60px -20px rgba(26,23,20,.5); background:#1a1714; padding:96px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;">
+    <div style="font-family:var(--font-sans); font-weight:600; font-size:14px; letter-spacing:.16em; text-transform:uppercase; color:#a06828; margin-bottom:36px;">AI agent · on-chain reason</div>
+    <blockquote style="font-family:var(--font-serif); font-weight:600; font-size:50px; line-height:1.28; letter-spacing:-.02em; color:#f9f4ea; margin:0; max-width:980px;">"Blended APY trending down <span style="color:#d9a96b;">38 bps</span> over three epochs — lowering the CORE target to keep the APEX residual positive and protect senior tranches."</blockquote>
+    <div style="display:flex; align-items:center; gap:14px; margin-top:48px;">
+      <span style="width:8px; height:8px; border-radius:999px; background:#95a96d; box-shadow:0 0 0 4px rgba(149,169,109,.2);"></span>
+      <span style="font-family:var(--font-mono); font-size:16px; color:#b8a98f;">Proposal #41 · executed · 0x22a9…b71A</span>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>

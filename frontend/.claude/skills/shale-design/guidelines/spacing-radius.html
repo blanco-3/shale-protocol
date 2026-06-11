@@ -1,0 +1,23 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Radius scale" subtitle="Echoes the brand mark's 14% rounded square" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-card); padding: 26px 28px; font-family: var(--font-sans); display:flex; gap:20px; align-items:flex-end; }
+  .u { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .sq { width: 66px; height: 66px; background: var(--rock-200); border: 1.5px solid var(--rock-600); }
+  .tok { font: 10px/1.4 var(--font-mono); color: var(--text-muted); text-align:center; }
+  .tok b { display:block; font: var(--fw-semibold) 11px/1 var(--font-sans); color: var(--text-strong); margin-bottom:3px; }
+</style>
+</head>
+<body>
+  <div class="u"><div class="sq" style="border-radius:var(--r-sm)"></div><div class="tok"><b>sm</b>7px</div></div>
+  <div class="u"><div class="sq" style="border-radius:var(--r-md)"></div><div class="tok"><b>md</b>11px</div></div>
+  <div class="u"><div class="sq" style="border-radius:var(--r-lg)"></div><div class="tok"><b>lg · card</b>16px</div></div>
+  <div class="u"><div class="sq" style="border-radius:var(--r-xl)"></div><div class="tok"><b>xl</b>22px</div></div>
+  <div class="u"><div class="sq" style="border-radius:var(--r-2xl)"></div><div class="tok"><b>2xl</b>30px</div></div>
+  <div class="u"><div class="sq" style="border-radius:var(--r-pill)"></div><div class="tok"><b>pill</b>999px</div></div>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!-- @dsCard group="Shale App" viewport="1180x760" name="SHALE — full app" subtitle="Interactive click-through: connect → dashboard → deposit → analytics" -->
+<!-- @startingPoint section="Shale App" subtitle="Full AI-yield-vault app — dashboard, deposit, analytics, portfolio" viewport="1180x760" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHALE Protocol</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  html, body { margin: 0; }
+  body { background: var(--bg); }
+  .shale-app { min-height: 100vh; }
+  .shale-container { max-width: var(--container); margin: 0 auto; padding: 0 28px; }
+  @keyframes shaleRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes shaleDrill {
+    0%   { top: -50px; opacity: 0; }
+    18%  { opacity: 1; }
+    82%  { opacity: 1; }
+    100% { top: calc(100% + 10px); opacity: 0; }
+  }
+  @keyframes shaleFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .shale-screen { animation: shaleFade var(--dur-base) var(--ease-out); }
+  * { scrollbar-width: thin; scrollbar-color: var(--rock-200) transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="data.js"></script>
+<script type="text/babel" src="NavBar.jsx"></script>
+<script type="text/babel" src="Hero.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
+<script type="text/babel" src="DepositFlow.jsx"></script>
+<script type="text/babel" src="Analytics.jsx"></script>
+<script type="text/babel" src="Safety.jsx"></script>
+<script type="text/babel" src="Scenarios.jsx"></script>
+
+<script type="text/babel">
+const { StrataMark, Button, Badge, Card } = window.SHALEDesignSystem_1fdf95;
+
+function ConnectGate({ onConnect }) {
+  return (
+    <div className="shale-sandstone" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div style={{ maxWidth: "440px", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", marginBottom: "26px" }}><StrataMark size={68} /></div>
+        <h1 style={{ font: "var(--fw-bold) 40px/1.02 var(--font-serif)", letterSpacing: "-0.03em", color: "var(--text-strong)", marginBottom: "16px" }}>
+          Yield, <em style={{ fontStyle: "italic", fontWeight: 600, color: "var(--rock-500)" }}>stratified.</em>
+        </h1>
+        <p style={{ font: "400 15px/1.6 var(--font-sans)", color: "var(--text-muted)", marginBottom: "28px" }}>
+          AI-managed, adaptive, multi-strategy yield vault on Arbitrum. Connect a wallet or sign in with a social account to begin.
+        </p>
+        <Button size="lg" onClick={onConnect} iconRight="→">Connect Wallet</Button>
+        <div style={{ marginTop: "20px", display: "flex", gap: "8px", justifyContent: "center" }}>
+          <Badge tone="neutral">Google</Badge><Badge tone="neutral">X</Badge><Badge tone="neutral">Farcaster</Badge><Badge tone="neutral">Any EVM</Badge>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Portfolio() {
+  return (
+    <div className="shale-screen" style={{ padding: "40px 0 60px" }}>
+      <h1 style={{ font: "var(--fw-bold) 34px/1 var(--font-serif)", color: "var(--text-strong)", letterSpacing: "-0.02em", marginBottom: "8px" }}>Portfolio</h1>
+      <p style={{ font: "400 14px/1 var(--font-sans)", color: "var(--text-muted)", marginBottom: "26px" }}>Your positions across all three tranches.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
+        {window.SHALE_POSITIONS.map((pos) => (
+          <Card key={pos.tier} accent={pos.tone} strataEdge pad="lg">
+            <div className="shale-eyebrow">{pos.shares}</div>
+            <div style={{ font: "var(--fw-bold) 22px/1 var(--font-serif)", color: "var(--text-strong)", margin: "8px 0 14px" }}>{pos.tier}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "24px", color: "var(--text-strong)" }}>{pos.value}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-soft)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--positive)" }}>{pos.yield}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: shaleToneVar(pos.tone) }}>{pos.apy} APY</span>
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Card surface="ink" pad="lg">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div className="shale-eyebrow" style={{ color: "var(--text-on-ink-muted)" }}>Total position value</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "32px", color: "var(--sand-50)", marginTop: "6px" }}>$26,198.30</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div className="shale-eyebrow" style={{ color: "var(--text-on-ink-muted)" }}>All-time yield</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "22px", color: "var(--core-300)", marginTop: "6px" }}>+$1,198.30</div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function App() {
+  const [connected, setConnected] = React.useState(false);
+  const [screen, setScreen] = React.useState("Dashboard");
+  const [depositTier, setDepositTier] = React.useState("apex");
+  const [agentAccepted, setAgentAccepted] = React.useState(false);
+
+  function navigate(to, tier) {
+    if (tier) setDepositTier(tier);
+    setScreen(to);
+    window.scrollTo({ top: 0 });
+  }
+
+  if (!connected) return <ConnectGate onConnect={() => setConnected(true)} />;
+
+  return (
+    <div className="shale-app shale-sandstone">
+      <window.NavBar active={screen} onNavigate={navigate} connected={connected} />
+      <div className="shale-container">
+        <div className="shale-screen" key={screen}>
+          {screen === "Dashboard" && <window.Dashboard onNavigate={navigate} agentAccepted={agentAccepted} onAcceptAgent={() => setAgentAccepted(true)} />}
+          {screen === "Deposit" && <window.DepositFlow initialTier={depositTier} />}
+          {screen === "Analytics" && <window.Analytics />}
+          {screen === "Safety" && <window.Safety />}
+          {screen === "Scenarios" && <window.Scenarios />}
+          {screen === "Portfolio" && <Portfolio />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!-- @dsCard group="Colors" viewport="700x240" name="Rock scale" subtitle="Bedrock → sand neutral ramp, lifted from the brand mark" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-card); padding: 22px 24px; font-family: var(--font-sans); }
+  .row { display: flex; gap: 0; border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .sw { flex: 1; height: 92px; display: flex; align-items: flex-end; padding: 8px; }
+  .sw span { font: var(--fw-semibold) 10px/1 var(--font-mono); letter-spacing: .02em; }
+  .meta { display: flex; gap: 0; margin-top: 10px; }
+  .meta div { flex: 1; padding: 0 8px; }
+  .meta b { font: var(--fw-semibold) 11px/1.4 var(--font-sans); color: var(--text-strong); display: block; }
+  .meta code { font: 10px/1.4 var(--font-mono); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:var(--rock-900)"><span style="color:#d9a96b">900</span></div>
+    <div class="sw" style="background:var(--rock-700)"><span style="color:#e7cda0">700</span></div>
+    <div class="sw" style="background:var(--rock-600)"><span style="color:#e7cda0">600</span></div>
+    <div class="sw" style="background:var(--rock-400)"><span style="color:#1a1714">400</span></div>
+    <div class="sw" style="background:var(--rock-200)"><span style="color:#1a1714">200</span></div>
+    <div class="sw" style="background:var(--rock-100)"><span style="color:#5c3318">100</span></div>
+    <div class="sw" style="background:var(--sand-50);box-shadow:inset 0 0 0 1px var(--border)"><span style="color:#5c3318">sand-50</span></div>
+  </div>
+  <div class="meta">
+    <div><b>Bedrock</b><code>#1a1714</code></div>
+    <div><b>Dark strata</b><code>#5c3318</code></div>
+    <div><b>Amber strata</b><code>#a06828</code></div>
+    <div><b>Sandy gold</b><code>#d9a96b</code></div>
+    <div><b>Sandstone</b><code>#f9f4ea</code></div>
+  </div>
+</body>
+</html>

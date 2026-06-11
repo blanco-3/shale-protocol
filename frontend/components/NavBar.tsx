@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { StrataMark } from "./ui/StrataMark";
 
 const NAV_LINKS = [
-  { href: "/",           label: "Dashboard" },
+  { href: "/app",        label: "Dashboard" },
   { href: "/deposit",    label: "Deposit" },
   { href: "/portfolio",  label: "Portfolio" },
   { href: "/analytics",  label: "Analytics" },
