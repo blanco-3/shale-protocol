@@ -1,4 +1,4 @@
-import { bpsToPercent, formatUsdc } from "../lib/utils";
+import { bpsToPercent, formatUsdcCompact } from "../lib/utils";
 import { Card } from "./ui/Card";
 import { Badge } from "./ui/Badge";
 import { RiskMeter } from "./ui/RiskMeter";
@@ -73,7 +73,7 @@ export function TierCard({ tier, tvl, apyMin, apyMax, apyLabel }: Props) {
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
         <StatTile label="Target APY" value={apyValue} />
-        <StatTile label="TVL" value={formatUsdc(tvl)} />
+        <StatTile label="TVL" value={formatUsdcCompact(tvl)} />
       </div>
 
       {/* Description */}

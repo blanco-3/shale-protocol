@@ -6,6 +6,15 @@ export function formatUsdc(amount: bigint): string {
   return "$" + (Number(amount) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2 });
 }
 
+/** Compact: $750K · $1.2M · $1.5B — for tight stat tiles */
+export function formatUsdcCompact(amount: bigint): string {
+  const n = Number(amount) / 1e6;
+  if (n >= 1_000_000_000) return "$" + (n / 1_000_000_000).toFixed(2) + "B";
+  if (n >= 1_000_000)     return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1_000)         return "$" + (n / 1_000).toFixed(1) + "K";
+  return "$" + n.toFixed(2);
+}
+
 export function parseUsdc(input: string): bigint {
   const n = parseFloat(input);
   if (isNaN(n) || n <= 0) return 0n;

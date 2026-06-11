@@ -7,7 +7,7 @@ import {
   MORPHO_STRATEGY_ADDRESS, SIM_MORPHO_ABI,
   STRATEGY_ROUTER_ADDRESS, STRATEGY_ROUTER_ABI,
 } from "../../lib/contracts";
-import { formatUsdc, TIERS, bpsToPercent } from "../../lib/utils";
+import { formatUsdc, formatUsdcCompact, TIERS, bpsToPercent } from "../../lib/utils";
 import { TierCard } from "../../components/TierCard";
 import { AgentPanel } from "../../components/AgentPanel";
 import { Card } from "../../components/ui/Card";
@@ -100,7 +100,7 @@ export default function Dashboard() {
       {/* Stats bar */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
         <Card pad="sm">
-          <StatTile size="sm" label="Total TVL" value={loading ? "—" : formatUsdc(totalTVL)} sub="principal" />
+          <StatTile size="sm" label="Total TVL" value={loading ? "—" : formatUsdcCompact(totalTVL)} sub="principal" />
         </Card>
         <Card pad="sm">
           <StatTile size="sm" label="Blended APY" value={blendedDisplay} sub="weighted avg" />
